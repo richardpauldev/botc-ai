@@ -457,7 +457,7 @@ def process_ravenkeeper(world, TB_ROLES, setup_counts):
                             next_worlds.append(spy_world)
 
                     # Branch: evil player is the Drunk (only if Drunk is allowed for untrustworthy)
-                    if seen_role == "Drunk" and "Drunk" in w["possible_roles_per_untrustworthy"][executed_player]:
+                    if seen_role == "Drunk" and "Drunk" in w["possible_roles_per_untrustworthy"][seen_player]:
                         drunk_world = deepcopy(w)
                         drunk_world["possible_roles_per_untrustworthy"][seen_player] = {"Drunk"}
                         for other in w["possible_roles_per_untrustworthy"]:
@@ -466,7 +466,42 @@ def process_ravenkeeper(world, TB_ROLES, setup_counts):
                         if enforce_required_minions(drunk_world, TB_ROLES, setup_counts):
                             next_worlds.append(drunk_world)
 
-                # If seen_role is a minion or demon, assign that role to seen_player
+                            def get_red_herring_constraint(constraints):
+                            for c in constraints:
+                                if "red herring" in c:
+                                    return c["red herring"]
+                            return None
+                
+                #TODO, add to world list of night deaths
+                if seen_player in demon_roles: # Starpass must have happened
+                    if seen_player in world["night_death"]: 
+                        # I don't remember exactly how python data structures work, is this right?
+                        ball_history = None
+                        for c in world["constraints"]:
+                            if "imp ball" in c:
+                                ball_history = c["imp ball"]
+                        if not ball_history:
+                            ball_history = dict()
+                            
+                        if world["death_time"][seen_player] in ball_history:
+                            ball_day = ball_history[world["death_time"][seen_player]]
+                            if "thrown" in ball_day:
+                                continue
+                            else: 
+                                ball_day.append({"thrown": seen_player}) 
+                                # I need this to be changed in c["imp ball"] will this happen currently?
+                        else:
+                            ball_history[world["death_time"][seen_player]] = {"thrown": seen_player}
+                        world["constraints"]["imp ball"] = ball_history
+
+                        
+                        
+                        if world["contraints"] has 
+                    elif setup_counts["Minion"] > 1:
+                        pass
+                    else:
+                        continue
+                        
                 if seen_role in evil_roles:
                     if seen_role in w["possible_roles_per_untrustworthy"][seen_player]:
                         assign_evil_world = deepcopy(w)
@@ -1000,7 +1035,7 @@ def deduction_pipeline(worlds, TB_ROLES, setup_counts, deduction_steps):
 
 
 
-def create_initial_world(player_names, trustworthy, claims, TB_ROLES, setup_counts):
+def create_initial_world(player_names, trustworthy, claims, TB_ROLES, setup_counts, pov_player=None):
     untrustworthy = [p for p in player_names if p not in trustworthy]
     n_untrustworthy = len(untrustworthy)
     n_minion = setup_counts.get("Minion", 0)
@@ -1008,12 +1043,11 @@ def create_initial_world(player_names, trustworthy, claims, TB_ROLES, setup_coun
     roles_needed = n_minion + n_demon
     has_extra = n_untrustworthy > roles_needed
 
-    all_evil_roles = set(TB_ROLES["Minion"] + TB_ROLES["Demon"])
-    if has_extra:
-        all_evil_roles.add("Drunk")
     possible_roles_per_untrustworthy ={}
     for p in untrustworthy:
-        if claims[p].get("dead", False):
+        if p == pov_player:
+            roles = set()
+        elif claims[p].get("dead", False):
             roles = set(TB_ROLES["Minion"])
         else:
             roles = set(TB_ROLES["Minion"] + TB_ROLES["Demon"])
@@ -1052,7 +1086,7 @@ def create_initial_world(player_names, trustworthy, claims, TB_ROLES, setup_coun
     }
     return world
 
-def all_initial_worlds(player_names, TB_ROLES, setup_counts, claims, dead_players=None):
+def all_initial_worlds(player_names, TB_ROLES, setup_counts, claims, pov_player=None):
     n_players = len(player_names)
     ''' Sample Claims Structure
         "Fiona": {
@@ -1067,6 +1101,8 @@ def all_initial_worlds(player_names, TB_ROLES, setup_counts, claims, dead_player
     results = []
 
     for evil in itertools.combinations(player_names, evil_count):
+        if pov_player in evil:
+            continue
         trustworthy = [p for p in player_names if p not in evil]
         num_trustworthy_outsiders = sum(
             1 for p in trustworthy
@@ -1078,7 +1114,7 @@ def all_initial_worlds(player_names, TB_ROLES, setup_counts, claims, dead_player
         else:
             for to_remove in trustworthy:
                 reduced_trustworthy = [p for p in trustworthy if p not in to_remove]
-                world = create_initial_world(player_names, reduced_trustworthy, claims, TB_ROLES, setup_counts)
+                world = create_initial_world(player_names, reduced_trustworthy, claims, TB_ROLES, setup_counts, pov_player)
                 results.append(world)
     return results
 
@@ -1436,7 +1472,7 @@ if __name__ == "__main__":
     # worlds = [create_initial_world(player_names, trustworthy, claims, TB_ROLES, setup_counts)]
     # List of deduction steps to run in order
 
-    worlds = all_initial_worlds(player_names, TB_ROLES, setup_counts, claims)
+    worlds = all_initial_worlds(player_names, TB_ROLES, setup_counts, claims, pov_player="Holly")
     deduction_steps = [
         starting_check,
         process_washerwoman,
@@ -1449,7 +1485,7 @@ if __name__ == "__main__":
         process_virgin,
         process_fortune_teller,
         # ...add more deduction steps here as you implement them...
-    ]
+    ]#TODO Make processes Respect TIme
 
 
 
@@ -1490,14 +1526,32 @@ if __name__ == "__main__":
     # ... and so on ...
 
     final_worlds = expand_all_to_concrete(final_worlds, TB_ROLES, setup_counts, player_names)
-    # corr = get_untrustworthy_correlation(final_worlds, player_names)
+    
     for i in range(len(final_worlds)):
         print_world(i, final_worlds[i])
-    # for p1 in player_names:
-    #     print(f"{p1}: ", end='')
-    #     print(", ".join(f"{p2}: {corr[p1][p2]:.2f}" for p2 in player_names))
+    corr = get_untrustworthy_correlation(final_worlds, player_names)
+    for p1 in player_names:
+        print(f"{p1}: ", end='')
+        print(", ".join(f"{p2}: {corr[p1][p2]:.2f}" for p2 in player_names))
 
     evil_prob, imp_prob = compute_role_probs(final_worlds, player_names)
 
     for p in player_names:
         print(f"{p}: {evil_prob[p]:.1f}% evil, {imp_prob[p]:.1f}% Imp")
+
+
+    '''
+    TODO:
+    #Ravekeeper, Undertaker, Fortune Teller, 
+    # 
+    # Slayer
+    Starpassing (still)
+    Remove post-death poisoning? 
+    What if not everyone has claimed a role? (3 for 3s)?
+    META Stuff: Washerwomen are usually good OR Spy, Mayor wins, etc.
+
+    Starpassing logic:
+    Each minion has the following ability:
+    If the Imp was killed in the night last night, you gain Imp powers
+    
+    '''
