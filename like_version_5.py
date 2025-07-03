@@ -1,4 +1,31 @@
 import itertools
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional
+from copy import deepcopy
+try:
+    from like_version_4 import construct_info_claim_dict  # type: ignore
+except Exception:  # pragma: no cover - fallback for truncated like_version_4
+    def construct_info_claim_dict(player, claim):
+        """Very simplified claim parsing used when like_version_4 can't be imported."""
+        if not claim:
+            return {}
+        result = {"claimer": player, "type": claim.get("role")}
+        for k, v in claim.items():
+            if k != "role":
+                result[k] = v
+        return result
+
+
+@dataclass
+class WorldState:
+    """Representation of a possible game world."""
+
+    roles: Dict[str, str]
+    poison_nights: List[int] = field(default_factory=list)
+    deaths: List[dict] = field(default_factory=list)
+    claims: Dict[str, dict] = field(default_factory=dict)
+    good_role_options: Dict[str, List[str]] = field(default_factory=dict)
+    red_herring: Optional[str] = None
 
 def generate_all_worlds(
     player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count
@@ -33,19 +60,32 @@ def generate_all_worlds(
                     if num_trustworthy_outsiders == outsider_count or num_trustworthy_outsiders == outsider_count + 2:
                         # No Drunk in evil
                         for drunk_player in [None]:  # No drunk, so no assignment
-                            world = {}
+                            roles = {}
                             for p in players:
                                 if p in minion_dict:
-                                    world[p] = minion_dict[p]
+                                    roles[p] = minion_dict[p]
                                 elif p == imp_player:
-                                    world[p] = "Imp"
+                                    roles[p] = "Imp"
                                 else:
                                     role = claims.get(p, {}).get("role")
                                     if role:
-                                        world[p] = role  # Explicit outsider claim
+                                        roles[p] = role  # Explicit outsider claim
                                     else:
-                                        world[p] = "Good"
-                            worlds.append(world.copy())
+                                        roles[p] = "Good"
+                            worlds.append(
+                                WorldState(
+                                    roles=roles,
+                                    claims={
+                                        pl: construct_info_claim_dict(pl, c)
+                                        for pl, c in claims.items()
+                                    },
+                                    good_role_options={
+                                        pl: c["roles"]
+                                        for pl, c in claims.items()
+                                        if "roles" in c
+                                    },
+                                )
+                            )
                     else:
                         # Outsider count doesn't match: must "remove" a trustworthy to allow Drunk as evil
                         for drunk_player in trustworthy:
@@ -54,42 +94,321 @@ def generate_all_worlds(
                             # Only assign Drunk to someone who is not already claiming outsider
                             if claims.get(drunk_player, {}).get("role") in TB_ROLES["Outsider"]:
                                 continue
-                            world = {}
+                            roles = {}
                             for p in players:
                                 if p in minion_dict:
-                                    world[p] = minion_dict[p]
+                                    roles[p] = minion_dict[p]
                                 elif p == imp_player:
-                                    world[p] = "Imp"
+                                    roles[p] = "Imp"
                                 elif p == drunk_player:
-                                    world[p] = "Drunk"
+                                    roles[p] = "Drunk"
                                 else:
                                     role = claims.get(p, {}).get("role")
                                     if role:
-                                        world[p] = role
+                                        roles[p] = role
                                     else:
-                                        world[p] = "Good"
-                            if len(world) == n:
-                                worlds.append(world.copy())
+                                        roles[p] = "Good"
+                            if len(roles) == n:
+                                worlds.append(
+                                    WorldState(
+                                        roles=roles,
+                                        claims={
+                                            pl: construct_info_claim_dict(pl, c)
+                                            for pl, c in claims.items()
+                                        },
+                                        good_role_options={
+                                            pl: c["roles"]
+                                            for pl, c in claims.items()
+                                            if "roles" in c
+                                        },
+                                    )
+                                )
     return worlds
 
-# Usage as before...
+
+def _claims_of_type(world: WorldState, claim_type: str):
+    """Helper to fetch all claims of a given type from the world."""
+    return [c for c in world.claims.values() if c.get("type") == claim_type]
 
 
-# Usage:
-player_names = ["Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Gina", "Holly"]
-all_minion_roles = ["Poisoner", "Scarlet Woman", "Baron", "Spy"]
-m_minions = 1
-claims = {
-    # Example: "Bob": {"role": "Recluse"}, ...
-}
-TB_ROLES = {
-    "Townsfolk": ["Chef", "Washerwoman", "Slayer", "Fortune Teller", "Undertaker", "Ravenkeeper", "Librarian", "Investigator", "Monk", "Virgin", "Empath", "Soldier", "Mayor"],
-    "Outsider": ["Drunk", "Recluse", "Saint", "Butler"],
-    "Minion": ["Poisoner", "Scarlet Woman", "Baron", "Spy"],
-    "Demon": ["Imp"]
-}
-outsider_count = 1  # Set as needed
+def _max_night_from_world(world: WorldState) -> int:
+    """Return the maximum referenced night number in a world."""
+    max_n = 1
+    for c in world.claims.values():
+        n = c.get("night")
+        if isinstance(n, int) and n > max_n:
+            max_n = n
+        for entry in c.get("night_results", []):
+            e_n = entry.get("night")
+            if isinstance(e_n, int) and e_n > max_n:
+                max_n = e_n
+    for d in world.deaths:
+        n = d.get("night")
+        if isinstance(n, int) and n > max_n:
+            max_n = n
+    for n in world.poison_nights:
+        if n > max_n:
+            max_n = n
+    return max_n
 
-worlds = generate_all_worlds(player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count)
-print(f"Generated {len(worlds)} worlds.")
-for w in worlds[:3]: print(w)
+
+def _is_alive(world: WorldState, player: str, night: int) -> bool:
+    """Return True if player is alive at the start of the given night."""
+    for d in world.deaths:
+        if d.get("player") == player:
+            d_n = d.get("night", 0)
+            if isinstance(d_n, int) and d_n <= night:
+                return False
+    return True
+
+
+def _poisoner_alive(world: WorldState, night: int) -> bool:
+    for p, r in world.roles.items():
+        if r == "Poisoner" and _is_alive(world, p, night):
+            return True
+    return False
+
+
+def _branch_poison(world: WorldState, night: int) -> List[WorldState]:
+    if not _poisoner_alive(world, night):
+        return []
+    if night in world.poison_nights:
+        return []
+    w = deepcopy(world)
+    w.poison_nights.append(night)
+    return [w]
+
+
+def _branch_red_herring(world: WorldState, night: int, TB_ROLES) -> List[WorldState]:
+    if world.red_herring is not None:
+        return []
+    candidates = set()
+    for info in _claims_of_type(world, "fortune teller"):
+        for entry in info.get("night_results", []):
+            if entry.get("night") != night:
+                continue
+            players = [entry.get("player1"), entry.get("player2")]
+            ping = bool(entry.get("ping"))
+            demon_seen = any(world.roles.get(p) == "Imp" for p in players)
+            if ping and not demon_seen:
+                for cand in players:
+                    role = world.roles.get(cand)
+                    if role in TB_ROLES.get("Townsfolk", []) + TB_ROLES.get("Outsider", []):
+                        candidates.add(cand)
+    result = []
+    for cand in candidates:
+        w = deepcopy(world)
+        w.red_herring = cand
+        result.append(w)
+    return result
+
+
+def process_washerwoman(world: WorldState, night: int, TB_ROLES) -> bool:
+    if night != 1:
+        return True
+    for info in _claims_of_type(world, "washerwoman"):
+        players = info.get("seen_players") or []
+        role = info.get("seen_role")
+        if players and role:
+            a, b = players
+            if world.roles.get(a) != role and world.roles.get(b) != role:
+                return False
+    return True
+
+
+def process_librarian(world: WorldState, night: int, TB_ROLES) -> bool:
+    if night != 1:
+        return True
+    for info in _claims_of_type(world, "librarian"):
+        players = info.get("seen_players", [])
+        role = info.get("seen_role")
+        if role is None:
+            if any(world.roles.get(p) in TB_ROLES.get("Outsider", []) for p in world.roles):
+                return False
+        else:
+            if not any(world.roles.get(p) == role for p in players):
+                return False
+    return True
+
+
+def process_investigator(world: WorldState, night: int, TB_ROLES) -> bool:
+    if night != 1:
+        return True
+    for info in _claims_of_type(world, "investigator"):
+        players = info.get("seen_players", [])
+        role = info.get("seen_role")
+        if not any(world.roles.get(p) == role for p in players):
+            return False
+    return True
+
+
+def process_undertaker(world: WorldState, night: int, TB_ROLES) -> bool:
+    for info in _claims_of_type(world, "undertaker"):
+        for entry in info.get("night_results", []):
+            if entry.get("night") == night:
+                executed = entry.get("executed_player")
+                seen_role = entry.get("seen_role")
+                if world.roles.get(executed) != seen_role:
+                    return False
+    return True
+
+
+def process_ravenkeeper(world: WorldState, night: int, TB_ROLES) -> bool:
+    for info in _claims_of_type(world, "ravenkeeper"):
+        if info.get("night") == night:
+            if world.roles.get(info.get("seen_player")) != info.get("seen_role"):
+                return False
+    return True
+
+
+def process_slayer(world: WorldState, night: int, TB_ROLES) -> bool:
+    for info in _claims_of_type(world, "slayer"):
+        if info.get("night") == night:
+            shot = info.get("shot_player")
+            died = info.get("died")
+            is_imp = world.roles.get(shot) == "Imp"
+            if died and not is_imp:
+                return False
+            if not died and is_imp:
+                return False
+    return True
+
+
+def process_virgin(world: WorldState, night: int, TB_ROLES) -> bool:
+    townsfolk = set(TB_ROLES.get("Townsfolk", []))
+    for info in _claims_of_type(world, "virgin"):
+        if info.get("night") == night:
+            nom = info.get("first_nominator")
+            died = info.get("died")
+            if nom:
+                nom_role = world.roles.get(nom)
+                if died and nom_role not in townsfolk:
+                    return False
+                if not died and nom_role in townsfolk:
+                    return False
+    return True
+
+
+def process_empath(world: WorldState, night: int, TB_ROLES) -> bool:
+    evil = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
+    for info in _claims_of_type(world, "empath"):
+        for entry in info.get("night_results", []):
+            if entry.get("night") == night:
+                neighbors = [entry.get("neighbor1"), entry.get("neighbor2")]
+                count = sum(1 for p in neighbors if world.roles.get(p) in evil)
+                if count != entry.get("num_evil"):
+                    return False
+    return True
+
+
+def process_fortune_teller(world: WorldState, night: int, TB_ROLES) -> bool:
+    for info in _claims_of_type(world, "fortune teller"):
+        for entry in info.get("night_results", []):
+            if entry.get("night") == night:
+                players = [entry.get("player1"), entry.get("player2")]
+                demon_seen = any(world.roles.get(p) == "Imp" for p in players)
+                if world.red_herring and world.red_herring in players:
+                    demon_seen = True
+                if bool(entry.get("ping")) != demon_seen:
+                    return False
+    return True
+
+
+def process_chef(world: WorldState, night: int, TB_ROLES) -> bool:
+    if night != 1:
+        return True
+    for info in _claims_of_type(world, "chef"):
+        pairs = info.get("pairs")
+        if pairs is None:
+            continue
+        players = sorted(world.roles)
+        evil = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []) + ["Recluse"])
+        count = 0
+        prev_evil = world.roles[players[-1]] in evil
+        for p in players:
+            cur_evil = world.roles[p] in evil
+            if prev_evil and cur_evil:
+                count += 1
+            prev_evil = cur_evil
+        if count != pairs:
+            return False
+    return True
+
+
+ROLE_STEPS = [
+    process_washerwoman,
+    process_librarian,
+    process_investigator,
+    process_undertaker,
+    process_ravenkeeper,
+    process_slayer,
+    process_virgin,
+    process_empath,
+    process_fortune_teller,
+    process_chef,
+]
+
+
+def deduction_pipeline(worlds, TB_ROLES):
+    """Apply deduction role by role, night by night."""
+    if not worlds:
+        return []
+    max_night = max(_max_night_from_world(w) for w in worlds)
+    current = worlds
+    for night in range(1, max_night + 1):
+        for step in ROLE_STEPS:
+            next_worlds = []
+            for w in current:
+                if step(w, night, TB_ROLES):
+                    next_worlds.append(w)
+                else:
+                    if step is process_fortune_teller:
+                        next_worlds.extend(_branch_red_herring(w, night, TB_ROLES))
+                    next_worlds.extend(_branch_poison(w, night))
+            current = next_worlds
+            if not current:
+                break
+        if not current:
+            break
+    return current
+
+
+if __name__ == "__main__":
+    player_names = ["Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Gina", "Holly"]
+    all_minion_roles = ["Poisoner", "Scarlet Woman", "Baron", "Spy"]
+    m_minions = 1
+    claims = {
+        # Players may claim a single role or provide multiple options
+        "Bob": {"role": "Recluse"},
+        "Alice": {"roles": ["Chef", "Investigator"]},
+    }
+    TB_ROLES = {
+        "Townsfolk": [
+            "Chef",
+            "Washerwoman",
+            "Slayer",
+            "Fortune Teller",
+            "Undertaker",
+            "Ravenkeeper",
+            "Librarian",
+            "Investigator",
+            "Monk",
+            "Virgin",
+            "Empath",
+            "Soldier",
+            "Mayor",
+        ],
+        "Outsider": ["Drunk", "Recluse", "Saint", "Butler"],
+        "Minion": ["Poisoner", "Scarlet Woman", "Baron", "Spy"],
+        "Demon": ["Imp"],
+    }
+    outsider_count = 1
+
+    worlds = generate_all_worlds(
+        player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count
+    )
+    print(f"Generated {len(worlds)} worlds before deduction.")
+    deduced = deduction_pipeline(worlds, TB_ROLES)
+    print(f"After deduction: {len(deduced)} worlds remain.")
+    for w in deduced[:3]:
+        print(w)
