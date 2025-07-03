@@ -120,10 +120,8 @@ def branch_for_poisoner(w, TB_ROLES, setup_counts, night=1):
     if not enforce_required_minions(poisoned_w, TB_ROLES, setup_counts):
         return None
     
-    if poisoned_w == w:
-        return None
     poisoned_w["constraints"].append(f"{night}_night_poisoned")
-    return None
+    return poisoned_w
 
 def process_washerwoman(world, TB_ROLES, setup_counts):
     info_items = [info for info in world["info_to_resolve"] if info["type"] == "washerwoman"]
@@ -493,7 +491,7 @@ def process_slayer(world, TB_ROLES, setup_counts):
     current_worlds = [world]
     for info in info_items:
         next_worlds = []
-        if not "night" in info:
+        if not "night" in info or not isinstance(info["night"], int):
             continue
         night = info["night"]
         shot_player = info["shot_player"]
@@ -549,18 +547,14 @@ def process_slayer(world, TB_ROLES, setup_counts):
 def process_virgin(world, TB_ROLES, setup_counts):
     info_items = [info for info in world["info_to_resolve"] if info["type"] == "virgin"]
     if not info_items:
-        if not "Gina" in world["possible_roles_per_untrustworthy"].keys():
-            print("nah")
         return [world] 
 
     current_worlds = [world]
     for info in info_items:
         next_worlds = []
-        print(info)
         night = info["night"]
         nom_player = info["first_nominator"]
         player_died = info["died"]
-        print(player_died)
         for w in current_worlds:
             roles = w["roles"]
             alignments = w["alignments"]
@@ -585,6 +579,9 @@ def process_virgin(world, TB_ROLES, setup_counts):
                 continue
             else:
                 if alignment == "trustworthy" and role in TB_ROLES["Townsfolk"]:
+                    pw = branch_for_poisoner(world, TB_ROLES, setup_counts, night=night)
+                    if pw:
+                        next_worlds.append(pw)
                     continue
                 next_worlds.append(w)
         current_worlds = next_worlds
@@ -719,15 +716,13 @@ def process_fortune_teller(world, TB_ROLES, setup_counts):
     
     info_items = [info for info in world["info_to_resolve"] if info["type"] == "fortune teller"]
     if not info_items:
-        if not "Eve" in world["possible_roles_per_untrustworthy"].keys():
-            print("nope")
         return [world]  # No fortune teller claims
 
     current_worlds = [world]
     for info in info_items:
         night_results = info.get("night_results", [])
         claimer = info["claimer"]
-        print(info)
+        # print(info)
 
         for night_info in night_results:
             next_worlds = []
@@ -915,8 +910,7 @@ def process_fortune_teller(world, TB_ROLES, setup_counts):
                             poison_branch(w)
                             continue
             current_worlds = [world for world in next_worlds if is_valid_world(world, TB_ROLES, setup_counts)]
-    return current_worlds
-                
+    return current_worlds      
 
 def is_valid_world(w, TB_ROLES, setup_counts):
     DEMONS = set(TB_ROLES["Demon"])
@@ -993,6 +987,7 @@ def deduction_pipeline(worlds, TB_ROLES, setup_counts, deduction_steps):
             for world in result:
                 valid_world = is_valid_world(world, TB_ROLES, setup_counts)
                 if valid_world:
+                    # print_world(-9, valid_world)
                     next_worlds.append(valid_world)
         current_worlds = next_worlds
         print(f"After {step.__name__}, {len(current_worlds)} worlds remain.")
@@ -1016,10 +1011,12 @@ def create_initial_world(player_names, trustworthy, claims, TB_ROLES, setup_coun
     all_evil_roles = set(TB_ROLES["Minion"] + TB_ROLES["Demon"])
     if has_extra:
         all_evil_roles.add("Drunk")
-
     possible_roles_per_untrustworthy ={}
     for p in untrustworthy:
-        roles = set(TB_ROLES["Minion"] + TB_ROLES["Demon"])
+        if claims[p].get("dead", False):
+            roles = set(TB_ROLES["Minion"])
+        else:
+            roles = set(TB_ROLES["Minion"] + TB_ROLES["Demon"])
         if has_extra and not (claims.get(p, {}).get("role") in TB_ROLES.get("Outsider", [])):
             roles.add("Drunk")
         possible_roles_per_untrustworthy[p] = roles
@@ -1057,27 +1054,32 @@ def create_initial_world(player_names, trustworthy, claims, TB_ROLES, setup_coun
 
 def all_initial_worlds(player_names, TB_ROLES, setup_counts, claims, dead_players=None):
     n_players = len(player_names)
+    ''' Sample Claims Structure
+        "Fiona": {
+            "role": "Chef",
+            "pairs": 1
+        },
+        "Gina": {
+            "role": "Fortune Teller",
+    '''
+    outsider_count = setup_counts["Outsider"]
+    evil_count = setup_counts["Minion"] + setup_counts["Demon"]
     results = []
-    if n_players <= 9:
-        liar_counts = [2, 3]
-    else:
-        liar_counts = [3, 4]
 
-    for n_liars in liar_counts:
-        for liars in itertools.combinations(player_names, n_liars):
-            trustworthy = [p for p in player_names if p not in liars]
+    for evil in itertools.combinations(player_names, evil_count):
+        trustworthy = [p for p in player_names if p not in evil]
+        num_trustworthy_outsiders = sum(
+            1 for p in trustworthy
+            if claims.get(p, {}).get("role") in TB_ROLES["Outsider"]
+        )
+        if num_trustworthy_outsiders == outsider_count or num_trustworthy_outsiders == outsider_count + 2:
             world = create_initial_world(player_names, trustworthy, claims, TB_ROLES, setup_counts)
-            # print("\nWorld created with liars:", liars)
-            # print("  Trustworthy:", trustworthy)
-            # print("  Alignments:", world["alignments"])
-            # print("  Claimed roles:", {p: claims.get(p, {}).get("role") for p in trustworthy})
-            # print("  Untrustworthy role combos (first 3 shown):", world["untrustworthy_roles"][:3])
-            # print("  Info to resolve:", world["info_to_resolve"])
-            # print("  Remaining roles:", world["remaining_roles"])
-            # print("  Constraints:", world["constraints"])
-            # print("---")
             results.append(world)
-    # print(f"\nTotal initial worlds generated: {len(results)}")
+        else:
+            for to_remove in trustworthy:
+                reduced_trustworthy = [p for p in trustworthy if p not in to_remove]
+                world = create_initial_world(player_names, reduced_trustworthy, claims, TB_ROLES, setup_counts)
+                results.append(world)
     return results
 
 def print_world(idx, w):
@@ -1184,9 +1186,10 @@ def construct_info_claim_dict(player, claim):
                 "seen_role": claim.get("seen_role"),
                 "night": claim.get("night"),
             }
-    elif role == "Slayer":
+    elif role == "Slayer": #TODO needs night for poison
         return {
             "type": "slayer",
+            "night": claim.get("night"),
             "claimer": player,
             "shot_player": claim.get("shot_player"),
             "died": claim.get("died")
@@ -1227,74 +1230,76 @@ def construct_info_claim_dict(player, claim):
                 for entry in claim.get("night_results", [])
             ]
         }
+    elif role == "Chef":
+        return {
+            "type": "chef",
+            "claimer": player,
+            "pairs": claim.get("pairs")
+        }
     # Add additional info roles here if desired
     return None
 
-from collections import defaultdict
+def chef_check(world, TB_ROLES, setup_counts, player_names):
+    info_items = [info for info in world["info_to_resolve"] if info["type"] == "chef"]
+    if not info_items:
+        return True
 
-def constraints_are_subset(superset, subset):
-    super_constraints = superset.get("constraints", [])
-    sub_constraints = subset.get("constraints", [])
-    return all(any(c == c2 for c2 in sub_constraints) for c in super_constraints)
+    info = info_items[0]
+    seen_pairs = info["pairs"]
 
-def is_subset_world(subset, superset):
-    # All possible roles in superset must be present in subset for each untrustworthy player
-    for player, sub_roles in subset["possible_roles_per_untrustworthy"].items():
-        super_roles = superset["possible_roles_per_untrustworthy"].get(player, set())
-        if not sub_roles.issubset(super_roles):
-            return False
-    # All constraints in superset must be present in subset
-    if not constraints_are_subset(superset, subset):
-        return False
-    return True
+    poss_evil_pair = 0
+    must_evil_pair = 0
 
-def remove_subset_worlds(worlds):
-    # Group worlds by their exact set of untrustworthy players
-    groups = defaultdict(list)
-    for w in worlds:
-        uw_set = frozenset(w["possible_roles_per_untrustworthy"].keys())
-        groups[uw_set].append(w)
-    
-    non_subsets = []
-    for group_worlds in groups.values():
-        n = len(group_worlds)
-        to_remove = set()
-        for i, wi in enumerate(group_worlds):
-            for j, wj in enumerate(group_worlds):
-                if i == j:
+    prev_role_can_be_evil = world["roles"][player_names[-1]] in ["Imp", "Recluse", "Spy", "Baron", "Scarlet Woman", "Poisoner"]
+    prev_role_must_be_evil = world["roles"][player_names[-1]] in ["Imp", "Baron", "Scarlet Woman", "Poisoner"]
+    for player in player_names:
+        cur_role_can_be_evil = world["roles"][player] in ["Imp", "Recluse", "Spy", "Baron", "Scarlet Woman", "Poisoner"]
+        cur_role_must_be_evil = world["roles"][player] in ["Imp", "Baron", "Scarlet Woman", "Poisoner"]
+        if cur_role_must_be_evil and prev_role_must_be_evil:
+            must_evil_pair += 1
+        if cur_role_can_be_evil and prev_role_can_be_evil:
+            poss_evil_pair += 1
+        prev_role_can_be_evil = cur_role_can_be_evil
+        prev_role_must_be_evil = prev_role_must_be_evil
+
+    # print(poss_evil_pair, must_evil_pair, seen_pairs)
+    if seen_pairs <= poss_evil_pair and seen_pairs >= must_evil_pair:
+        return True
+
+    if "Poisoner" in world["roles"] and not "1_night_poisoned" in world["constraints"]:
+        world["constraints"].append("1_night_poisoned")
+        return True
+    return False
+
+def expand_all_to_concrete(final_worlds, TB_ROLES, setup_counts, player_names):
+        """
+        Given a list of worlds (final_worlds), expand each into all concrete worlds,
+        and remove duplicates. Returns a list of unique, valid, concrete worlds.
+        """
+        unique_worlds = {}
+        for world in final_worlds:
+            untrustworthy = list(world["possible_roles_per_untrustworthy"].keys())
+            possible_roles_lists = [list(world["possible_roles_per_untrustworthy"][p]) for p in untrustworthy]
+            for assignment in product(*possible_roles_lists):
+                # Enforce unique roles among untrustworthy (remove this if not needed)
+                if len(set(assignment)) < len(assignment):
                     continue
-                if is_subset_world(wi, wj):
-                    to_remove.add(i)
-                    break
-        for idx, w in enumerate(group_worlds):
-            if idx not in to_remove:
-                non_subsets.append(w)
-    return non_subsets
-
-from itertools import product
-from copy import deepcopy
-
-def expand_possibles_to_concrete(world, TB_ROLES, setup_counts):
-    """
-    Given a world with sets of possible roles per untrustworthy, yield all concrete possible worlds,
-    each with one role per player, passing is_valid_world.
-    """
-    untrustworthy = list(world["possible_roles_per_untrustworthy"].keys())
-    possible_roles_lists = [list(world["possible_roles_per_untrustworthy"][p]) for p in untrustworthy]
-    # If there are duplicate roles allowed, remove this uniqueness check below
-    for assignment in product(*possible_roles_lists):
-        # If roles must be unique among untrustworthies (most scripts), skip duplicates
-        if len(set(assignment)) < len(assignment):
-            continue
-        w = deepcopy(world)
-        for p, role in zip(untrustworthy, assignment):
-            w["roles"][p] = role
-            # After assigning, set their possible roles to just that role
-            w["possible_roles_per_untrustworthy"][p] = {role}
-        # Only yield if passes all validity checks
-        if is_valid_world(w, TB_ROLES, setup_counts):
-            yield w
-
+                w = deepcopy(world)
+                for p, role in zip(untrustworthy, assignment):
+                    w["roles"][p] = role
+                    w["possible_roles_per_untrustworthy"][p] = {role}
+                # Only add if valid and not already seen
+                if is_valid_world(w, TB_ROLES, setup_counts) and chef_check(w, TB_ROLES, setup_counts, player_names):
+                    num_untrustworthy = len(w["possible_roles_per_untrustworthy"])
+                    good_players = len(player_names) - num_untrustworthy
+                    drunk_factor = 1
+                    if setup_counts["Minion"] + setup_counts["Demon"] < num_untrustworthy:
+                        drunk_factor = 1/ (good_players + 1) 
+                    w["weight"] = drunk_factor / good_players ** len(w["constraints"])
+                    key = world_key(w)
+                    if key not in unique_worlds:
+                        unique_worlds[key] = w
+        return list(unique_worlds.values())
 
 def compute_role_probs(worlds, all_players):
     """
@@ -1330,7 +1335,7 @@ def compute_role_probs(worlds, all_players):
 
     return evil_probs, imp_probs
 
-
+# TODO fix chef wraparound
 
 # Example usage
 if __name__ == "__main__":
@@ -1346,58 +1351,88 @@ if __name__ == "__main__":
     setup_counts = {
         "Minion": 1,
         "Demon": 1,
-        "Outsider": 0,
-        "Townsfolk": 6
+        "Outsider": 1,
+        "Townsfolk": 5
     }
 
     claims = {
         "Alice": {
-            "role": "Undertaker", # Imp bluffing as undertaker
+            "role": "Fortune Teller",
             "night_results": [
-                {"night": 1, "executed_player": "Dave", "seen_role": "Poisoner"},
-                {"night": 2, "executed_player": "Eve", "seen_role": "Baron"},
-                {"night": 3, "executed_player": "Carol", "seen_role": "Investigator"}
-            ] # Carol is evil/ poisoned
+                {"night": 1, "ping": True, "player1": "Alice", "player2": "Eve"},
+                {"night": 2, "ping": True, "player1": "Bob", "player2": "Fiona"},
+                {"night": 3, "ping": True, "player1": "Alice", "player2": "Carol"},
+
+            ],
+            # "dead": True
         },
         "Bob": {
-            "role": "Empath",
-            "night_results": [
-                {"night": 1, "num_evil": 1, "neighbor1": "Alice", "neighbor2": "Carol"},
-                {"night": 2, "num_evil": 1, "neighbor1": "Alice", "neighbor2": "Carol"},
-                {"night": 3, "num_evil": 1, "neighbor1": "Alice", "neighbor2": "Dave"}
-            ]
+            "role": "Recluse",
+            # "night_results": [
+            #     {"night": 1, "ping": True, "player1": "Bob", "player2": "Fiona"},
+            #     {"night": 2, "ping": False, "player1": "Bob", "player2": "Eve"}
+            # ],
+            "dead": True
         },
         "Carol": {
-            "role": "Investigator",
-            "seen_role": "Poisoner", # Carol is evil/ poisoned night 1
-            "seen_players": ["Dave", "Alice"]
+            "role": "Slayer",
+            "dead": True
+            # "shot_player": "Fiona",
+            # "died": False,
+            # "night": 2
+            # "night_results": [
+            #     {"night": 2, "executed_player": "Fiona", "seen_role": "Chef"},
+            #     # {"night": 3, "executed_player": "Dave", "seen_role": "Investigator"},
+            #     # {"night": 4, "executed_player": "Gina", "seen_role": "Chef"}
+            # ],
+            # "dead": True
         },
         "Dave": {
-            "role": "Recluse" #Dave is the baron
+            "role": "Ravenkeeper",
+            "seen_player": "Carol",
+            "seen_role": "Slayer",
+            "night": 3,
+            "dead": True
+            # "night_results": [
+            #     {"night": 1, "num_evil": 1, "neighbor1": "Carol", "neighbor2": "Eve"}
+            # ],
+            # "dead": True
         },
         "Eve": {
-            "role": "Fortune Teller",
-            "night_results": [ 
-                {"night": 1, "ping": True, "player1": "Carol", "player2": "Holly"},
-                {"night": 2, "ping": False, "player1": "Dave", "player2": "Holly"},
-                {"night": 3, "ping": True, "player1": "Alice", "player2": "Fiona"}
-            ]
+            "role": "Washerwoman",
+            "seen_role": "Virgin",
+            "seen_players": ["Dave", "Fiona"],
+            "dead": True
+            # "night": 2,
+            # "seen_role": "Empath",
+            # "seen_player": "Gina"
         },
         "Fiona": {
-            "role": "Saint",
+            "role": "Virgin",
+            # "night_results": [
+            #     {"night": 2, "seen_role": "Imp", "executed_player": "Dave"},
+            #     {"night": 3, "seen_role": "Fortune Teller", "executed_player": "Alice"}
+            # ],
+            "dead": True
         },
         "Gina": {
-            "role": "Virgin",
-            "night": 2,
-            "first_nominator": "Alice",
-            "died": False
+            "role": "Butler",
+            # "night_results": [
+            #     {"night": 1, "num_evil": 1, "neighbor1": "Holly", "neighbor2": "Fiona"}
+            # ],
+            # "dead": True
         },
         "Holly": {
-            "role": "Ravenkeeper" # Baron bluffing as RK
+            "role": "Mayor",
+            # "seen_role": "Undertaker",
+            # "seen_players": ["Bob", "Gina"]
+            # "dead": True,
+            # "first_nominator": "Fiona",
+            # "died": False
         }
     }
 
-    # trustworthy = ["Bob", "Carol", "Dave", "Eve", "Fiona", "Gina"]  
+    # trustworthy = ["Alice", "Bob", "Carol", "Fiona", "Gina", "Holly"]  
     # worlds = [create_initial_world(player_names, trustworthy, claims, TB_ROLES, setup_counts)]
     # List of deduction steps to run in order
 
@@ -1412,7 +1447,7 @@ if __name__ == "__main__":
         process_slayer,
         process_empath,
         process_virgin,
-        process_fortune_teller
+        process_fortune_teller,
         # ...add more deduction steps here as you implement them...
     ]
 
@@ -1422,8 +1457,9 @@ if __name__ == "__main__":
     final_worlds = deduction_pipeline(worlds, TB_ROLES, setup_counts, deduction_steps)
 
     print(f"\nWorlds left after all deduction: {len(final_worlds)}")
-    for idx, w in enumerate(final_worlds):
-        print_world(idx, w)
+    # for idx, w in enumerate(final_worlds):
+
+        # print_world(idx, w)
     # final_worlds = remove_subset_worlds(final_worlds)
     # print(f"\nWorlds left after reduction: {len(final_worlds)}")
     # for idx, w in enumerate(final_worlds):
@@ -1435,33 +1471,16 @@ if __name__ == "__main__":
         Here, just the roles and constraints (sorted) are included for uniqueness.
         """
         # Use tuple of sorted (player, role) and sorted (constraint as tuple of items)
+        def normalize_constraint(c):
+            if isinstance(c, dict):
+                # Sorted tuple of items, for deterministic order
+                return ("dict", tuple(sorted(c.items())))
+            else:
+                # Just use the string directly
+                return ("str", str(c))
         roles_key = tuple(sorted(world["roles"].items()))
-        constraints_key = tuple(sorted(tuple(sorted(c.items())) for c in world.get("constraints", [])))
+        constraints_key = tuple(sorted((normalize_constraint(c) for c in world.get("constraints", [])), key=str)) 
         return (roles_key, constraints_key)
-
-    def expand_all_to_concrete(final_worlds, TB_ROLES, setup_counts):
-        """
-        Given a list of worlds (final_worlds), expand each into all concrete worlds,
-        and remove duplicates. Returns a list of unique, valid, concrete worlds.
-        """
-        unique_worlds = {}
-        for world in final_worlds:
-            untrustworthy = list(world["possible_roles_per_untrustworthy"].keys())
-            possible_roles_lists = [list(world["possible_roles_per_untrustworthy"][p]) for p in untrustworthy]
-            for assignment in product(*possible_roles_lists):
-                # Enforce unique roles among untrustworthy (remove this if not needed)
-                if len(set(assignment)) < len(assignment):
-                    continue
-                w = deepcopy(world)
-                for p, role in zip(untrustworthy, assignment):
-                    w["roles"][p] = role
-                    w["possible_roles_per_untrustworthy"][p] = {role}
-                # Only add if valid and not already seen
-                if is_valid_world(w, TB_ROLES, setup_counts):
-                    key = world_key(w)
-                    if key not in unique_worlds:
-                        unique_worlds[key] = w
-        return list(unique_worlds.values())
 
 
     # for i, w in enumerate(expanded_worlds, 1):
@@ -1470,46 +1489,15 @@ if __name__ == "__main__":
     #     print("Constraints:", w.get("constraints", []))
     # ... and so on ...
 
-    final_worlds = expand_all_to_concrete(final_worlds, TB_ROLES, setup_counts)
-    corr = get_untrustworthy_correlation(final_worlds, player_names)
-
-    for p1 in player_names:
-        print(f"{p1}: ", end='')
-        print(", ".join(f"{p2}: {corr[p1][p2]:.2f}" for p2 in player_names))
+    final_worlds = expand_all_to_concrete(final_worlds, TB_ROLES, setup_counts, player_names)
+    # corr = get_untrustworthy_correlation(final_worlds, player_names)
+    for i in range(len(final_worlds)):
+        print_world(i, final_worlds[i])
+    # for p1 in player_names:
+    #     print(f"{p1}: ", end='')
+    #     print(", ".join(f"{p2}: {corr[p1][p2]:.2f}" for p2 in player_names))
 
     evil_prob, imp_prob = compute_role_probs(final_worlds, player_names)
 
     for p in player_names:
         print(f"{p}: {evil_prob[p]:.1f}% evil, {imp_prob[p]:.1f}% Imp")
-
-
-
-    def get_normalized_world_weights(worlds):
-        """
-        Given a list of worlds, return a list of (world, normalized_weight) pairs.
-        weight = 1 / ((10 ** num_trustworthy) * num_trustworthy ** num_constraints)
-        Normalized so all weights sum to 1.
-        """
-        raw_weights = []
-        for w in worlds:
-            trustworthy = [p for p, align in w["alignments"].items() if align == "trustworthy"]
-            num_trustworthy = len(trustworthy)
-            num_constraints = len(w.get("constraints", []))
-            # Avoid division by zero if num_trustworthy is 0 (just in case)
-            if num_trustworthy == 0:
-                raw_weight = 0
-            else:
-                raw_weight = 1 / ((10 ** (len(player_names) - num_trustworthy)) * (num_trustworthy ** num_constraints))
-            raw_weights.append(raw_weight)
-        total = sum(raw_weights)
-        # Avoid division by zero if total == 0
-        if total == 0:
-            norm_weights = [1/len(worlds)] * len(worlds)
-        else:
-            norm_weights = [w/total for w in raw_weights]
-        return list(zip(worlds, norm_weights))
-
-    # final_results = get_normalized_world_weights(final_worlds)
-    # for world, weight in final_results:
-    #     print_world(0, world)
-    #     print(f"Weight: {weight:.6f}, Constraints: {world['constraints']}")
