@@ -203,6 +203,66 @@ def _branch_red_herring(world: WorldState, night: int, TB_ROLES) -> List[WorldSt
     return result
 
 
+def _alive_players(world: WorldState, night: int) -> List[str]:
+    """Return list of players alive at the start of the given night."""
+    return [p for p in world.roles if _is_alive(world, p, night)]
+
+
+def _demon_alive(world: WorldState, night: int) -> bool:
+    for p, r in world.roles.items():
+        if r == "Imp" and _is_alive(world, p, night):
+            return True
+    return False
+
+
+def _handle_imp_day(world: WorldState, night: int, TB_ROLES) -> List[WorldState]:
+    alive_before = len(_alive_players(world, night)) + 1
+    sw_candidates = [p for p, r in world.roles.items() if r == "Scarlet Woman" and _is_alive(world, p, night)]
+    if sw_candidates and alive_before >= 5:
+        w = deepcopy(world)
+        w.roles[sw_candidates[0]] = "Imp"
+        return [w]
+    return []
+
+
+def _handle_imp_night(world: WorldState, night: int, TB_ROLES) -> List[WorldState]:
+    minions = [p for p, r in world.roles.items() if r in TB_ROLES.get("Minion", []) and _is_alive(world, p, night)]
+    if not minions:
+        return []
+    if any(world.roles[p] == "Scarlet Woman" for p in minions):
+        sw = next(p for p in minions if world.roles[p] == "Scarlet Woman")
+        w = deepcopy(world)
+        w.roles[sw] = "Imp"
+        return [w]
+    result = []
+    for m in minions:
+        w = deepcopy(world)
+        w.roles[m] = "Imp"
+        result.append(w)
+    return result
+
+
+def _apply_imp_death(world: WorldState, night: int, TB_ROLES) -> List[WorldState]:
+    worlds = [world]
+    for d in world.deaths:
+        if d.get("night") != night:
+            continue
+        if world.roles.get(d.get("player")) != "Imp":
+            continue
+        time = d.get("time", "night")
+        next_worlds = []
+        for w in worlds:
+            if time == "day":
+                branch = _handle_imp_day(w, night, TB_ROLES)
+            else:
+                branch = _handle_imp_night(w, night, TB_ROLES)
+            for nb in branch:
+                if _demon_alive(nb, night):
+                    next_worlds.append(nb)
+        worlds = next_worlds
+    return worlds
+
+
 def process_washerwoman(world: WorldState, night: int, TB_ROLES) -> bool:
     if night != 1:
         return True
@@ -266,11 +326,17 @@ def process_slayer(world: WorldState, night: int, TB_ROLES) -> bool:
         if info.get("night") == night:
             shot = info.get("shot_player")
             died = info.get("died")
+            claimer = info.get("claimer")
             is_imp = world.roles.get(shot) == "Imp"
             if died and not is_imp:
                 return False
             if not died and is_imp:
                 return False
+            if died and claimer:
+                r = world.roles.get(claimer)
+                evil = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
+                if r in evil or r == "Drunk":
+                    return False
     return True
 
 
@@ -280,11 +346,17 @@ def process_virgin(world: WorldState, night: int, TB_ROLES) -> bool:
         if info.get("night") == night:
             nom = info.get("first_nominator")
             died = info.get("died")
+            claimer = info.get("claimer")
             if nom:
                 nom_role = world.roles.get(nom)
                 if died and nom_role not in townsfolk:
                     return False
                 if not died and nom_role in townsfolk:
+                    return False
+            if died and claimer:
+                r = world.roles.get(claimer)
+                evil = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
+                if r in evil or r == "Drunk":
                     return False
     return True
 
@@ -368,6 +440,11 @@ def deduction_pipeline(worlds, TB_ROLES):
             current = next_worlds
             if not current:
                 break
+        if current:
+            updated = []
+            for w in current:
+                updated.extend(_apply_imp_death(w, night, TB_ROLES))
+            current = updated
         if not current:
             break
     return current
