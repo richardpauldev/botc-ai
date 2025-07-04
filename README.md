@@ -3,7 +3,7 @@
 A Python-based AI and game engine for the social deduction game [Blood on the Clocktower](https://www.bloodontheclocktower.com/), designed to play, simulate, and analyze complex deduction scenarios.
 
 > **Status:** 🚧 Work in progress / testing phase.  
-> The codebase is rapidly evolving; some file names and structures are temporary. The main AI logic currently lives in `like_version_4.py`. Refactoring and clean-up planned for future releases.
+> The codebase is rapidly evolving; some file names and structures are temporary. The main AI logic currently lives in `like_version_5.py`. Refactoring and clean-up planned for future releases.
 
 ## What is this?
 
@@ -20,7 +20,7 @@ This project is an experimental AI designed to:
 
 ## Limitations & To-Do
 - File structure is under heavy development; expect refactoring soon.
-- Many scripts are duplicated or experimental; use `like_version_4.py` for latest logic.
+- Many scripts are duplicated or experimental; use `like_version_5.py` for latest logic.
 - Minimal user interface—currently used for research, testing, and development only.
 - Improved documentation, tests, and a public API are planned.
 

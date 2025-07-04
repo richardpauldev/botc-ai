@@ -2,18 +2,108 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from copy import deepcopy
-try:
-    from like_version_4 import construct_info_claim_dict  # type: ignore
-except Exception:  # pragma: no cover - fallback for truncated like_version_4
-    def construct_info_claim_dict(player, claim):
-        """Very simplified claim parsing used when like_version_4 can't be imported."""
-        if not claim:
-            return {}
-        result = {"claimer": player, "type": claim.get("role")}
-        for k, v in claim.items():
-            if k != "role":
-                result[k] = v
-        return result
+
+def construct_info_claim_dict(player, claim):
+    """Given a player's name and claim dict, construct a deduction-ready info claim dict."""
+    role = claim.get("role")
+    # print(player)
+    if role == "Washerwoman":
+        return {
+            "type": "washerwoman",
+            "claimer": player,
+            "seen_role": claim.get("seen_role"),
+            "seen_players": claim.get("seen_players"),
+        }
+    elif role == "Librarian":
+        # seen_role can be None (for "saw no outsiders") or the outsider role (for "one of X and Y is [Outsider]")
+        # seen_players should be [] or length 2
+        return {
+            "type": "librarian",
+            "claimer": player,
+            "seen_role": claim.get("seen_role"),
+            "seen_players": claim.get("seen_players", []),
+        }
+    elif role == "Investigator":
+        # seen_role is always the minion role, seen_players is always 2 names
+        return {
+            "type": "investigator",
+            "claimer": player,
+            "seen_role": claim.get("seen_role"),
+            "seen_players": claim.get("seen_players", []),
+        }
+    elif role == "Undertaker":
+        return {
+            "type": "undertaker",
+            "claimer": player,
+            "night_results": [
+                {
+                    "night": entry.get("night"),
+                    "executed_player": entry.get("executed_player"),
+                    "seen_role": entry.get("seen_role"),
+                }
+                for entry in claim.get("night_results", [])
+            ]
+        }
+    elif role == "Ravenkeeper":
+        return {
+                "type": "ravenkeeper",
+                "claimer": player,
+                "seen_player": claim.get("seen_player"),
+                "seen_role": claim.get("seen_role"),
+                "night": claim.get("night"),
+            }
+    elif role == "Slayer": #TODO needs night for poison
+        return {
+            "type": "slayer",
+            "night": claim.get("night"),
+            "claimer": player,
+            "shot_player": claim.get("shot_player"),
+            "died": claim.get("died")
+        }
+    elif role == "Virgin":
+        return {
+            "type": "virgin",
+            "claimer": player,
+            "night": claim.get("night"),
+            "first_nominator": claim.get("first_nominator"),
+            "died": claim.get("died")
+        }
+    elif role == "Empath":
+        return {
+            "type": "empath",
+            "claimer": player,
+            "night_results": [
+                {
+                    "night": entry.get("night"),
+                    "num_evil": entry.get("num_evil"),
+                    "neighbor1": entry.get("neighbor1"),
+                    "neighbor2": entry.get("neighbor2")
+                }
+                for entry in claim.get("night_results", [])
+            ]
+        }
+    elif role == "Fortune Teller":
+        return {
+            "type": "fortune teller",
+            "claimer": player,
+            "night_results": [
+                {
+                    "night": entry.get("night"),
+                    "ping": entry.get("ping"),
+                    "player1": entry.get("player1"),
+                    "player2": entry.get("player2")
+                }
+                for entry in claim.get("night_results", [])
+            ]
+        }
+    elif role == "Chef":
+        return {
+            "type": "chef",
+            "claimer": player,
+            "pairs": claim.get("pairs")
+        }
+    # Add additional info roles here if desired
+    return None
 
 
 @dataclass
