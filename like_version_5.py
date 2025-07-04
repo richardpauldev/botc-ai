@@ -589,6 +589,56 @@ def deduction_pipeline(worlds, TB_ROLES):
             break
     return current
 
+def get_untrustworthy_correlation(worlds, all_players, TB_ROLES):
+    """Return correlation matrix of players appearing together as evil."""
+    evil_roles = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
+    unique_sets = set()
+    for w in worlds:
+        uw_set = frozenset(p for p, r in w.roles.items() if r in evil_roles)
+        unique_sets.add(uw_set)
+
+    player_to_sets = {p: set() for p in all_players}
+    for uw_set in unique_sets:
+        for p in uw_set:
+            player_to_sets[p].add(uw_set)
+
+    correlation = {p1: {} for p1 in all_players}
+    for p1 in all_players:
+        sets_with_p1 = player_to_sets[p1]
+        total = len(sets_with_p1)
+        for p2 in all_players:
+            if total == 0:
+                correlation[p1][p2] = 0.0
+            else:
+                both_count = sum(1 for s in sets_with_p1 if p2 in s)
+                correlation[p1][p2] = both_count / total
+    return correlation
+
+
+def compute_role_probs(worlds, all_players, TB_ROLES):
+    # TODO Add in weighting
+    """Return probability each player is evil or specifically the Imp."""
+    evil_roles = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
+    evil_probs = {p: 0.0 for p in all_players}
+    imp_probs = {p: 0.0 for p in all_players}
+    total = float(len(worlds))
+
+    if total == 0:
+        return evil_probs, imp_probs
+
+    for w in worlds:
+        for p in all_players:
+            role = w.roles.get(p)
+            if role in evil_roles:
+                evil_probs[p] += 1
+            if role == "Imp":
+                imp_probs[p] += 1
+
+    for p in all_players:
+        evil_probs[p] = evil_probs[p] / total * 100
+        imp_probs[p] = imp_probs[p] / total * 100
+
+    return evil_probs, imp_probs
 
 if __name__ == "__main__":
     player_names = ["Alice", "Bob", "Carol", "Dave", "Eve", "Frank", "Gina", "Holly"]
@@ -700,3 +750,18 @@ if __name__ == "__main__":
     print(f"After deduction: {len(deduced)} worlds remain.")
     for w in deduced[:3]:
         print(w)
+    
+    corr = get_untrustworthy_correlation(deduced, player_names, TB_ROLES)
+    print("\nUntrustworthy correlation:")
+    header = " " * 10 + " ".join(f"{p:>10}" for p in player_names)
+    print(header)
+    for p1 in player_names:
+        row = f"{p1:>10} " + " ".join(
+            f"{corr[p1][p2]*100:>9.1f}%" for p2 in player_names
+        )
+        print(row)
+
+    evil_prob, imp_prob = compute_role_probs(deduced, player_names, TB_ROLES)
+    print("\nRole probabilities:")
+    for p in player_names:
+        print(f"{p}: {evil_prob[p]:.1f}% evil, {imp_prob[p]:.1f}% Imp")
