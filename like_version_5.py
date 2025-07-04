@@ -71,13 +71,15 @@ def generate_all_worlds(
                                         roles[p] = role  # Explicit outsider claim
                                     else:
                                         roles[p] = "Good"
+                            parsed_claims = {}
+                            for pl, c in claims.items():
+                                info = construct_info_claim_dict(pl, c)
+                                if info:
+                                    parsed_claims[pl] = info
                             worlds.append(
                                 WorldState(
                                     roles=roles,
-                                    claims={
-                                        pl: construct_info_claim_dict(pl, c)
-                                        for pl, c in claims.items()
-                                    },
+                                    claims=parsed_claims,
                                     good_role_options={
                                         pl: c["roles"]
                                         for pl, c in claims.items()
@@ -107,13 +109,15 @@ def generate_all_worlds(
                                     else:
                                         roles[p] = "Good"
                             if len(roles) == n:
+                                parsed_claims = {}
+                                for pl, c in claims.items():
+                                    info = construct_info_claim_dict(pl, c)
+                                    if info:
+                                        parsed_claims[pl] = info
                                 worlds.append(
                                     WorldState(
                                         roles=roles,
-                                        claims={
-                                            pl: construct_info_claim_dict(pl, c)
-                                            for pl, c in claims.items()
-                                        },
+                                        claims=parsed_claims,
                                         good_role_options={
                                             pl: c["roles"]
                                             for pl, c in claims.items()

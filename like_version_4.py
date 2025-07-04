@@ -1402,11 +1402,11 @@ if __name__ == "__main__":
             #     {"night": 1, "ping": True, "player1": "Bob", "player2": "Fiona"},
             #     {"night": 2, "ping": False, "player1": "Bob", "player2": "Eve"}
             # ],
-            "dead": True
+            # "dead": True
         },
         "Carol": {
             "role": "Slayer",
-            "dead": True
+            # "dead": True
             # "shot_player": "Fiona",
             # "died": False,
             # "night": 2
@@ -1422,7 +1422,7 @@ if __name__ == "__main__":
             "seen_player": "Carol",
             "seen_role": "Slayer",
             "night": 3,
-            "dead": True
+            # "dead": True
             # "night_results": [
             #     {"night": 1, "num_evil": 1, "neighbor1": "Carol", "neighbor2": "Eve"}
             # ],
@@ -1432,7 +1432,7 @@ if __name__ == "__main__":
             "role": "Washerwoman",
             "seen_role": "Virgin",
             "seen_players": ["Dave", "Fiona"],
-            "dead": True
+            # "dead": True
             # "night": 2,
             # "seen_role": "Empath",
             # "seen_player": "Gina"
@@ -1443,7 +1443,7 @@ if __name__ == "__main__":
             #     {"night": 2, "seen_role": "Imp", "executed_player": "Dave"},
             #     {"night": 3, "seen_role": "Fortune Teller", "executed_player": "Alice"}
             # ],
-            "dead": True
+            # "dead": True
         },
         "Gina": {
             "role": "Butler",
