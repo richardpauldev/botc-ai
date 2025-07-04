@@ -138,7 +138,7 @@ def generate_all_worlds(
 
 def _claims_of_type(world: WorldState, claim_type: str):
     """Helper to fetch all claims of a given type from the world."""
-    return [c for c in world.roles.values() if c == claim_type]
+    return [c for c in world.claims.values() if c.get("type") == claim_type]
 
 
 def _max_night_from_world(world: WorldState) -> int:
