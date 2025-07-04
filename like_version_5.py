@@ -144,8 +144,9 @@ def _claims_of_type(world: WorldState, claim_type: str) -> List[str]:
 def _trustworthy_claims(world: WorldState, claim_type: str) -> List[dict]:
     """Return claim info for the trustworthy player(s) with the given role."""
     result = []
+    # print("asdiljfk", world.claims, world.roles, claim_type)
     for player, role in world.roles.items():
-        if role == claim_type:
+        if role.lower() == claim_type:
             info = world.claims.get(player)
             if info and info.get("type") == claim_type:
                 result.append(info)
@@ -210,7 +211,7 @@ def _branch_red_herring(world: WorldState, night: int, TB_ROLES) -> List[WorldSt
                 continue
             players = [entry.get("player1"), entry.get("player2")]
             ping = bool(entry.get("ping"))
-            demon_seen = any(world.roles.get(p) == "Imp" for p in players)
+            demon_seen = any(world.roles.get(p) in ["Imp", "Recluse"] for p in players)
             if ping and not demon_seen:
                 for cand in players:
                     role = world.roles.get(cand)
@@ -335,7 +336,9 @@ def process_undertaker(world: WorldState, night: int, TB_ROLES) -> bool:
 
 
 def process_ravenkeeper(world: WorldState, night: int, TB_ROLES) -> bool:
+    # print("raven", _trustworthy_claims(world, "ravenkeeper"))
     for info in _trustworthy_claims(world, "ravenkeeper"):
+        # print(info)
         if info.get("night") == night:
             if world.roles.get(info.get("seen_player")) != info.get("seen_role"):
                 return False
@@ -348,7 +351,7 @@ def process_slayer(world: WorldState, night: int, TB_ROLES) -> bool:
             shot = info.get("shot_player")
             died = info.get("died")
             claimer = info.get("claimer")
-            is_imp = world.roles.get(shot) == "Imp"
+            is_imp = world.roles.get(shot) in ["Imp", "Recluse"]
             if died and not is_imp:
                 return False
             if not died and is_imp:
@@ -399,10 +402,11 @@ def process_fortune_teller(world: WorldState, night: int, TB_ROLES) -> bool:
         for entry in info.get("night_results", []):
             if entry.get("night") == night:
                 players = [entry.get("player1"), entry.get("player2")]
-                demon_seen = any(world.roles.get(p) == "Imp" for p in players)
+                demon_seen = any(world.roles.get(p) == "Imp" or world.roles.get(p) == "Recluse" for p in players)
                 if world.red_herring and world.red_herring in players:
                     demon_seen = True
                 if bool(entry.get("ping")) != demon_seen:
+                    print("rejected", world.red_herring)
                     return False
     return True
 
@@ -452,14 +456,6 @@ def deduction_pipeline(worlds, TB_ROLES):
         for step in ROLE_STEPS:
             next_worlds = []
             for w in current:
-                roless = w.roles
-                if roless["Alice"] == "Drunk" and roless["Eve"] == "Imp" and roless["Holly"] == "Baron":
-                    print(roless)
-                    do_prints = True
-                else:
-                    do_prints = False
-                if do_prints:
-                    print(step.__name__)
                 if step(w, night, TB_ROLES):
                     next_worlds.append(w)
                 else:
