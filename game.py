@@ -911,19 +911,21 @@ class DumbStorytellerAI(StorytellerAI):
         return result
 
     def chef_evilness_map(self, alive_players):
+        """Return a mapping of player seat -> whether they register as evil."""
         mapping = {}
         for p in alive_players:
             if p.role.name == "Recluse":
-                mapping[p] = random.choice([True, False])
-                print(
-                    f"DEBUG: Chef checks {p.name} (Recluse), random evil? {mapping[p]}"
-                )
+                val = random.choice([True, False])
+                mapping[p.seat] = val
+                print(f"DEBUG: Chef checks {p.name} (Recluse), random evil? {val}")
             elif p.role.name == "Spy":
-                mapping[p] = random.choice([True, False])
-                print(f"DEBUG: Chef checks {p.name} (Spy), random evil? {mapping[p]}")
+                val = random.choice([True, False])
+                mapping[p.seat] = val
+                print(f"DEBUG: Chef checks {p.name} (Spy), random evil? {val}")
             else:
-                mapping[p] = p.role.alignment in [Alignment.MINION, Alignment.DEMON]
-                print(f"DEBUG: Chef checks {p.name}, evil? {mapping[p]}")
+                val = p.role.alignment in [Alignment.MINION, Alignment.DEMON]
+                mapping[p.seat] = val
+                print(f"DEBUG: Chef checks {p.name}, evil? {val}")
         return mapping
 
     def give_empath_info(self, empath, game, true_evil_neighbors):
@@ -1309,7 +1311,7 @@ class Chef(Role):
             for i in range(N):
                 p1 = alive_players[i]
                 p2 = alive_players[(i + 1) % N]  # wrap around
-                if evilness_map[p1] and evilness_map[p2]:
+                if evilness_map[p1.seat] and evilness_map[p2.seat]:
                     evil_pairs += 1
             chef_info = self.storyteller_ai.give_chef_info(player, game, evil_pairs)
             player.memory["info"] = {"pairs": chef_info}
