@@ -60,10 +60,8 @@ class WorldState:
     good_role_options: Dict[str, List[str]] = field(default_factory=dict)
     red_herring: Optional[str] = None
 
-do_prints = False
-
 def generate_all_worlds(
-    player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count, deaths=None,
+    player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count, deaths=None, pov_player=None
 ):
     worlds = []
     n = len(player_names)
@@ -78,13 +76,10 @@ def generate_all_worlds(
             for minion_role_perm in itertools.permutations(minion_role_combo):
                 minion_dict = dict(zip(minion_players, minion_role_perm))
                 non_minions = [p for p in players if p not in minion_players]
-
                 for imp_player in non_minions:
-                    if imp_player == "Eve" and minion_players[0] == "Holly" and minion_dict["Holly"] == "Baron":
-                        do_prints = True
-                    else:
-                        do_prints = False
                     evil = set(minion_players) | {imp_player}
+                    if pov_player and pov_player in evil:
+                        continue
                     trustworthy = [p for p in players if p not in evil]
                     num_trustworthy_outsiders = sum(
                         1 for p in trustworthy
@@ -151,7 +146,6 @@ def generate_all_worlds(
                                         roles[p] = role
                                     else:
                                         roles[p] = "Good"
-                            do_prints &= roles["Alice"] == "Drunk"
                                 
                             if len(roles) == n:
                                 parsed_claims = {}
