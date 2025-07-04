@@ -1,17 +1,28 @@
 from enum import Enum, auto
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+# Toggle detailed debug logging
+DEBUG = False
+
+
+def debug(msg: str) -> None:
+    if DEBUG:
+        print(f"DEBUG: {msg}")
+
 
 class Phase(Enum):
     NIGHT = auto()
     DAY = auto()
     GAME_OVER = auto()
 
+
 class Alignment(Enum):
     TOWNSFOLK = "Townsfolk"
     OUTSIDER = "Outsider"
     MINION = "Minion"
     DEMON = "Demon"
+
 
 @dataclass
 class PlayerView:
@@ -29,10 +40,13 @@ class PlayerView:
     memory: dict
     history: list
     votes: dict
+
+
 class Role:
     """
     Base class for all roles. Each role has an alignment and may have night/day abilities.
     """
+
     def __init__(self, name, alignment):
         self.name = name
         self.alignment = alignment
@@ -42,6 +56,7 @@ class Role:
 
     def day_action(self, player, game):
         pass  # Override in child classes
+
 
 def create_role(role_name, storyteller_ai):
     # Roles that use only the AI (require passing storyteller_ai)
@@ -85,20 +100,25 @@ def create_role(role_name, storyteller_ai):
 
 TROUBLE_BREWING_ROLES = {
     Alignment.TOWNSFOLK: [
-        "Washerwoman", "Librarian", "Investigator", "Chef", "Empath",
-        "Fortune Teller", "Undertaker", "Monk", "Ravenkeeper", "Virgin",
-        "Slayer", "Soldier", "Mayor"
+        "Washerwoman",
+        "Librarian",
+        "Investigator",
+        "Chef",
+        "Empath",
+        "Fortune Teller",
+        "Undertaker",
+        "Monk",
+        "Ravenkeeper",
+        "Virgin",
+        "Slayer",
+        "Soldier",
+        "Mayor",
     ],
-    Alignment.OUTSIDER: [
-        "Butler", "Drunk", "Recluse", "Saint"
-    ],
-    Alignment.MINION: [
-        "Poisoner", "Scarlet Woman", "Spy", "Baron"
-    ],
-    Alignment.DEMON: [
-        "Imp"
-    ]
+    Alignment.OUTSIDER: ["Butler", "Drunk", "Recluse", "Saint"],
+    Alignment.MINION: ["Poisoner", "Scarlet Woman", "Spy", "Baron"],
+    Alignment.DEMON: ["Imp"],
 }
+
 
 class PlayerController:
     def __init__(self):
@@ -124,20 +144,23 @@ class PlayerController:
 
     def choose_poisoner_target(self, candidates, player_view):
         raise NotImplementedError
-    
+
     def choose_nominee(self, candidates: list, player_view: PlayerView):
         raise NotImplementedError
-    
-    def cast_vote(self, nominee: 'Player', player_view: PlayerView) -> bool:
+
+    def cast_vote(self, nominee: "Player", player_view: PlayerView) -> bool:
         raise NotImplementedError
-    
+
     def share_info(self, game, self_player, context=None):
         raise NotImplementedError
-    
+
+
 class HumanPlayerController(PlayerController):
     def choose_fortune_teller_targets(self, candidates, player_view):
         print("FT Player View", player_view)
-        print(f"\n{self.player.name} (Fortune Teller): Pick TWO different players to test.")
+        print(
+            f"\n{self.player.name} (Fortune Teller): Pick TWO different players to test."
+        )
         for i, p in enumerate(candidates):
             print(f"{i}: {p.name} ({p.role.name})")
         idx1 = int(input("Enter the number for the first target: "))
@@ -161,7 +184,9 @@ class HumanPlayerController(PlayerController):
         print("Ravenkeeper Player View", player_view)
         if not candidates:
             return None
-        print(f"\n{self.player.name} (Ravenkeeper): Pick a player to check if you die tonight.")
+        print(
+            f"\n{self.player.name} (Ravenkeeper): Pick a player to check if you die tonight."
+        )
         for i, p in enumerate(candidates):
             print(f"{i}: {p.name} ({p.role.name})")
         idx = int(input("Enter number: "))
@@ -186,11 +211,11 @@ class HumanPlayerController(PlayerController):
             print(f"{i}: {p.name} ({p.role.name})")
         idx = int(input("Enter number: "))
         return candidates[idx]
-    
+
     def choose_nominee(self, candidates, player_view):
         print(f"\n{self.player.name}: nominate someone (or Enter to skip).")
         for i, p in enumerate(candidates):
-            status = 'Alive' if p.alive else 'Dead'
+            status = "Alive" if p.alive else "Dead"
             print(f"  {i}: {p.name} ({status})")
         resp = input("Number or Enter: ")
         if resp == "":
@@ -199,11 +224,12 @@ class HumanPlayerController(PlayerController):
 
     def cast_vote(self, nominee, player_view):
         resp = input(f"{self.player.name}: execute {nominee.name}? (y/N): ")
-        return resp.strip().lower() == 'y'
-    
+        return resp.strip().lower() == "y"
+
     def share_info(self, game, self_player, context=None):
         pass
-    
+
+
 class EmpathController(PlayerController):
     def __init__(self):
         super().__init__()
@@ -211,14 +237,17 @@ class EmpathController(PlayerController):
 
     def set_player(self, player):
         return super().set_player(player)
-    
+
     def get_latest_empath_info(self, player_view: PlayerView):
-        info_list = player_view.memory.get('info', [])
+        info_list = player_view.memory.get("info", [])
         return info_list[-1] if info_list else None
-    
+
     def get_neighbor_seats(self, player_view: PlayerView):
         # Map neighbor names to seat numbers
-        name_to_seat = {p['player_name']: p['player_seat'] for p in player_view.alive_players + player_view.dead_players}
+        name_to_seat = {
+            p["player_name"]: p["player_seat"]
+            for p in player_view.alive_players + player_view.dead_players
+        }
         latest_info = self.get_latest_empath_info(player_view)
         if latest_info:
             left = name_to_seat.get(latest_info["neighbors"][0])
@@ -228,7 +257,7 @@ class EmpathController(PlayerController):
 
     def suspicion_scores(self, player_view: PlayerView):
         suspicion = {}
-        info_list = player_view.memory.get('info', [])
+        info_list = player_view.memory.get("info", [])
         if not info_list:
             return suspicion
 
@@ -247,8 +276,8 @@ class EmpathController(PlayerController):
                 for n in neighbors:
                     suspicion[n] = suspicion.get(n, 0) + 0.5
         return suspicion
-    
-    def cast_vote(self, nominee: 'Player', player_view: PlayerView) -> bool:
+
+    def cast_vote(self, nominee: "Player", player_view: PlayerView) -> bool:
         latest_info = self.get_latest_empath_info(player_view)
         if not latest_info:
             return False
@@ -261,98 +290,115 @@ class EmpathController(PlayerController):
             return True
         # Default: Do not vote unless strong suspicion
         return False
-    
+
     def share_info(self, game, self_player, context=None):
-            if not self.has_claimed:
-                info_list = self_player.player_view.memory.get('info', [])
-                if info_list:
-                    # Summarize all nights
-                    msg = "I am the Empath. My info:\n"
-                    msg += "\n".join([
+        if not self.has_claimed:
+            info_list = self_player.player_view.memory.get("info", [])
+            if info_list:
+                # Summarize all nights
+                msg = "I am the Empath. My info:\n"
+                msg += "\n".join(
+                    [
                         f"N{entry['night']}: Neighbors {entry['neighbors'][0]} & {entry['neighbors'][1]} - Evil Count: {entry['evil_count']}"
                         for entry in info_list
-                    ])
-                else:
-                    msg = "I am the Empath. No info yet."
-                    for player in game.players:
-                        self.send_info(player, {"from": self_player.name, "public_announcement": msg})
-                    self.has_claimed = True
-            elif context == "wakeup" and self_player.alive:
-                latest = self.get_latest_empath_info(self_player.player_view)
-                if latest:
-                    msg = (f"Night {latest['night']}: Neighbors {latest['neighbors'][0]}, "
-                        f"{latest['neighbors'][1]}; Evil Count: {latest['evil_count']}")
-                    for player in game.players:
-                        self.send_info(player, {"from": self_player.name, "public_announcement": msg})
-class Player:
-    """
-    Represents a single player (seat).
-    """
-    def __init__(self, seat_number, name, controller):
-        self.seat = seat_number
-        self.name = name
-        self.controller = controller
-        self.controller.set_player(self)
-        self.role = None # Set by Game during setup
-        self.alive = True
-        self.memory = {} # For AI: claims/suspicions/actions
-        self.votes_today = 0
-        self.has_used_dead_vote = False
-        
+                    ]
+                )
+            else:
+                msg = "I am the Empath. No info yet."
+                for player in game.players:
+                    self.send_info(
+                        player, {"from": self_player.name, "public_announcement": msg}
+                    )
+                self.has_claimed = True
+        elif context == "wakeup" and self_player.alive:
+            latest = self.get_latest_empath_info(self_player.player_view)
+            if latest:
+                msg = (
+                    f"Night {latest['night']}: Neighbors {latest['neighbors'][0]}, "
+                    f"{latest['neighbors'][1]}; Evil Count: {latest['evil_count']}"
+                )
+                for player in game.players:
+                    self.send_info(
+                        player, {"from": self_player.name, "public_announcement": msg}
+                    )
 
-    def assign_role(self, role):
+
+@dataclass
+class Player:
+    """Represents a single player (seat)."""
+
+    seat: int
+    name: str
+    controller: PlayerController
+    role: Role | None = None
+    alive: bool = True
+    memory: dict = field(default_factory=dict)
+    votes_today: int = 0
+    has_used_dead_vote: bool = False
+
+    def __post_init__(self) -> None:
+        self.controller.set_player(self)
+
+    def assign_role(self, role: Role) -> None:
         self.role = role
 
-    def kill(self):
+    def kill(self) -> None:
         self.alive = False
 
-    def revive(self):
+    def revive(self) -> None:
         self.alive = True
 
-    def receive_info(self, from_player, info):
-        self.memory.setdefault('received_info', []).append({'from': from_player.name, 'info': info})
+    def receive_info(self, from_player, info) -> None:
+        self.memory.setdefault("received_info", []).append(
+            {"from": from_player.name, "info": info}
+        )
 
     def __repr__(self):
-        if self.role != None:
-            return f"{self.name} ({self.role.name}) - {'Alive' if self.alive else 'Dead'}"
-        else: return f"{self.name} (None) - {'Alive' if self.alive else 'Dead'}"
-    
+        role_name = self.role.name if self.role is not None else "None"
+        status = "Alive" if self.alive else "Dead"
+        return f"{self.name} ({role_name}) - {status}"
+
     def choose_fortune_teller_targets(self, game):
-        return self.controller.choose_fortune_teller_targets(game.players, game.get_player_view(self))
+        return self.controller.choose_fortune_teller_targets(
+            game.players, game.get_player_view(self)
+        )
 
     def choose_monk_protect(self, game):
         candidates = [p for p in game.players if p != self]
-        return self.controller.choose_monk_protect(candidates, game.get_player_view(self))
+        return self.controller.choose_monk_protect(
+            candidates, game.get_player_view(self)
+        )
 
     def choose_ravenkeeper_reveal(self, game):
-        return self.controller.choose_ravenkeeper_reveal(game.players, game.get_player_view(self))
+        return self.controller.choose_ravenkeeper_reveal(
+            game.players, game.get_player_view(self)
+        )
 
     def choose_imp_kill(self, game):
         return self.controller.choose_imp_kill(game.players, game.get_player_view(self))
 
     def choose_poisoner_target(self, game):
-        return self.controller.choose_poisoner_target(game.players, game.get_player_view(self))
+        return self.controller.choose_poisoner_target(
+            game.players, game.get_player_view(self)
+        )
 
 
-    
+@dataclass
 class GameState:
-    """
-    Stores public info: time, deaths, votes, etc.
-    """
-    def __init__(self, player_count):
-        self.day = 1
-        self.night = 0
-        self.phase = Phase.NIGHT
-        self.nominees = []
-        self.votes = {}  # nominee -> [voters]
-        self.dead_players = set()
-        self.grimoire = {}  # seat_number -> Player (full info)
-        self.history = []  # Log of actions
-        self.executed_today = None
-        self.pending_deaths = set()
+    """Public game state shared with all players."""
 
-        #Special
-        self.monk_protected = None
+    player_count: int
+    day: int = 1
+    night: int = 0
+    phase: Phase = Phase.NIGHT
+    nominees: list = field(default_factory=list)
+    votes: dict = field(default_factory=dict)
+    dead_players: set = field(default_factory=set)
+    grimoire: dict = field(default_factory=dict)
+    history: list = field(default_factory=list)
+    executed_today: "Player" | None = None
+    pending_deaths: set = field(default_factory=set)
+    monk_protected: "Player" | None = None
 
     def queue_death(self, player):
         self.pending_deaths.add(player.seat)
@@ -368,12 +414,17 @@ class GameState:
     def record_death(self, player):
         self.dead_players.add(player.seat)
 
+
 class Game:
     """
     Main controller
     """
+
     def __init__(self, player_names, role_list):
-        self.players = [Player(i, name, HumanPlayerController()) for i, name in enumerate(player_names)]
+        self.players = [
+            Player(i, name, HumanPlayerController())
+            for i, name in enumerate(player_names)
+        ]
         self.state = GameState(len(self.players))
         self.roles = role_list
         self.assign_roles()
@@ -388,19 +439,31 @@ class Game:
             player.assign_role(role)
 
     def assign_evil_info_and_bluffs(self):
-        evil_team = [p for p in self.players if p.role.alignment in [Alignment.MINION, Alignment.DEMON]]
-        demon = next((p for p in evil_team if p.role.alignment == Alignment.DEMON), None)
-        
+        evil_team = [
+            p
+            for p in self.players
+            if p.role.alignment in [Alignment.MINION, Alignment.DEMON]
+        ]
+        demon = next(
+            (p for p in evil_team if p.role.alignment == Alignment.DEMON), None
+        )
+
         # --- 1. Assign Bluffs to Demon ---
-        all_good_roles = TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK] + TROUBLE_BREWING_ROLES[Alignment.OUTSIDER]
+        all_good_roles = (
+            TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK]
+            + TROUBLE_BREWING_ROLES[Alignment.OUTSIDER]
+        )
         # Remove roles actually in play (except Drunk's cover role)
-        in_play = [p.role.cover_role_name if p.role.name == "Drunk" else p.role.name for p in self.players]
+        in_play = [
+            p.role.cover_role_name if p.role.name == "Drunk" else p.role.name
+            for p in self.players
+        ]
         in_play.append([p.role.name for p in self.players if p.role.name == "Drunk"])
         bluff_pool = [r for r in all_good_roles if r not in in_play]
         # Choose 3 bluffs randomly
         bluffs = random.sample(bluff_pool, k=3) if len(bluff_pool) >= 3 else bluff_pool
         if demon:
-            demon.memory['bluffs'] = bluffs
+            demon.memory["bluffs"] = bluffs
 
         # --- 2. Share Evil Team Info with All Evil Players ---
         evil_team_info = [
@@ -408,7 +471,7 @@ class Game:
             for p in evil_team
         ]
         for p in evil_team:
-            p.memory['evil_team'] = evil_team_info
+            p.memory["evil_team"] = evil_team_info
 
     def info_swapping_opportunity(self, context=None):
         for player in self.players:
@@ -416,7 +479,7 @@ class Game:
 
     def get_alive_players(self):
         return [p for p in self.players if p.alive]
-    
+
     def night_phase(self):
         """
         night phase for alive roles w/ abilities
@@ -427,10 +490,8 @@ class Game:
 
         self.state.night += 1
         self.state.monk_protected = None
-        for role_type in [Alignment.MINION, Alignment.DEMON, Alignment.TOWNSFOLK, Alignment.OUTSIDER]:
-            for player in self.get_alive_players():
-                if player.role.alignment == role_type:
-                    player.role.night_action(player, self)
+        for player in self.get_alive_players():
+            player.role.night_action(player, self)
         self.state.advance_phase()
 
     def day_phase(self):
@@ -449,12 +510,12 @@ class Game:
         for p in game.players:
             print(p.seat, p.name, game.get_player_view(p))
         alive_players = self.get_alive_players()
-        
+
         self.state.nominees = []
         self.state.votes = []
         nominations = 0
         executed_today = None
-        
+
         for nominator in alive_players:
             pv = self.get_player_view(nominator)
             nominee = nominator.controller.choose_nominee(self.players, pv)
@@ -462,13 +523,13 @@ class Game:
                 continue
             self.state.nominees.append((nominator, nominee))
             nominations += 1
-            print(f"{nominator.name} nominates {nominee.name}") 
+            print(f"{nominator.name} nominates {nominee.name}")
 
             if hasattr(nominee.role, "on_nominated") and nominee.alive:
                 nominee.role.on_nominated(nominee, nominator, self)
                 if not nominator.alive:
                     print(f"{nominator.name} executed by Virgin's ability!")
-                    break       
+                    break
         all_votes = {}
 
         if not executed_today and self.state.nominees:
@@ -478,10 +539,14 @@ class Game:
             print(f"Votes required to execute: {required_votes}\n")
             votes_per_nominee = []
             for idx, (nominator, nominee) in enumerate(self.state.nominees):
-                print(f"\nNominee {idx}: {nominee.name} (nominated by {nominator.name})")
+                print(
+                    f"\nNominee {idx}: {nominee.name} (nominated by {nominator.name})"
+                )
                 votes = []
                 vote_names = []
-                for p in [p for p in self.players if p.alive or not p.has_used_dead_vote]:
+                for p in [
+                    p for p in self.players if p.alive or not p.has_used_dead_vote
+                ]:
                     pv = self.get_player_view(p)
                     if p.controller.cast_vote(nominee, pv):
                         votes.append()
@@ -492,15 +557,21 @@ class Game:
                 votes_per_nominee.append((nominee, votes))
                 all_votes[nominee.name] = vote_names
 
-            self.state.votes = all_votes #TODO don't override
-            
+            self.state.votes = all_votes  # TODO don't override
+
             print("\nVoting summary:")
             for nominee, names in all_votes.items():
                 print(f"  {nominee}: {len(names)} votes - [{', '.join(names)}]")
 
             # Determine maximum vote count
-            max_votes = max((len(votes) for nominee, votes in votes_per_nominee), default=0)
-            top_nominees = [nominee for nominee, votes in votes_per_nominee if len(votes) == max_votes and max_votes >= required_votes]
+            max_votes = max(
+                (len(votes) for nominee, votes in votes_per_nominee), default=0
+            )
+            top_nominees = [
+                nominee
+                for nominee, votes in votes_per_nominee
+                if len(votes) == max_votes and max_votes >= required_votes
+            ]
 
             if len(top_nominees) == 1:
                 executed_today = top_nominees[0]
@@ -509,15 +580,27 @@ class Game:
                 self.state.executed_today = executed_today
                 # Saint check (with drunk/poisoned check)
                 if executed_today.role.name == "Saint":
-                    ai = executed_today.role.storyteller_ai if hasattr(executed_today.role, "storyteller_ai") else None
-                    is_drunk_poisoned = ai.is_drunk_or_poisoned(executed_today, self) if ai else False
+                    ai = (
+                        executed_today.role.storyteller_ai
+                        if hasattr(executed_today.role, "storyteller_ai")
+                        else None
+                    )
+                    is_drunk_poisoned = (
+                        ai.is_drunk_or_poisoned(executed_today, self) if ai else False
+                    )
                     if not is_drunk_poisoned:
                         print("Saint was executed! Evil wins immediately!")
                         self.state.phase = Phase.GAME_OVER
-                        self.state.history.append("Saint was executed. Evil wins immediately.")
+                        self.state.history.append(
+                            "Saint was executed. Evil wins immediately."
+                        )
                     else:
-                        print("Saint was executed while drunk/poisoned—ability does NOT trigger.")
-                        self.state.history.append("Saint was executed while drunk/poisoned (no effect).")
+                        print(
+                            "Saint was executed while drunk/poisoned—ability does NOT trigger."
+                        )
+                        self.state.history.append(
+                            "Saint was executed while drunk/poisoned (no effect)."
+                        )
             elif len(top_nominees) > 1:
                 print("\nTie for most votes; no one is executed.")
                 self.state.executed_today = None
@@ -527,32 +610,37 @@ class Game:
 
         if nominations < 1:
             print("\nNo nominations today.")
-            self.state.executed_today = None   
-        
-        self.state.advance_phase()
+            self.state.executed_today = None
 
+        self.state.advance_phase()
 
     def execute_player(self, player):
         player.kill()
         self.state.record_death(player)
-        self.state.history.append(f"{player.name} was executed on day {self.state.day}.")
+        self.state.history.append(
+            f"{player.name} was executed on day {self.state.day}."
+        )
 
         self.resolve_scarlet_woman(player)
 
     def check_win_conditions(self):
         alive = self.get_alive_players()
         demon_alive = any(p.role.alignment == Alignment.DEMON for p in alive)
-        if len(alive) == 3 and any(p.role.name == "Mayor" for p in alive) and self.state.phase == Phase.NIGHT:
+        if (
+            len(alive) == 3
+            and any(p.role.name == "Mayor" for p in alive)
+            and self.state.phase == Phase.NIGHT
+        ):
             return "Good Wins!"
         if not demon_alive:
             self.state.phase = Phase.GAME_OVER
             return "Good wins!"
-        
+
         if len(alive) <= 2:
             self.state.phase = Phase.GAME_OVER
             return "Evil wins!"
         return None
-        
+
     def run(self):
         """
         Main game loop
@@ -566,7 +654,7 @@ class Game:
             if result or self.state.phase == Phase.GAME_OVER:
                 print(result)
                 break
-        
+
         # At end of game, after run loop
         print("\nGame over! Final state:")
         for p in self.players:
@@ -581,15 +669,23 @@ class Game:
                 is_drunk_poisoned = ai.is_drunk_or_poisoned(p, self)
                 if not is_drunk_poisoned:
                     p.role = Imp(ai)
-                    self.state.history.append(f"Scarlet Woman ({p.name}) becomes the new Imp after {killed_player.name} was killed.")
-                    print(f"Scarlet Woman ({p.name}) becomes the new Imp after {killed_player.name} was killed.")
+                    self.state.history.append(
+                        f"Scarlet Woman ({p.name}) becomes the new Imp after {killed_player.name} was killed."
+                    )
+                    print(
+                        f"Scarlet Woman ({p.name}) becomes the new Imp after {killed_player.name} was killed."
+                    )
                     return
-                
+
     def get_player_view(self, player):
         return PlayerView(
             player_seat=player.seat,
             player_name=player.name,
-            role_name=player.role.name if player.role.name != "Drunk" else player.cover_role_name,
+            role_name=(
+                player.role.name
+                if player.role.name != "Drunk"
+                else player.cover_role_name
+            ),
             phase=self.state.phase,
             day=self.state.day,
             night=self.state.night,
@@ -600,29 +696,52 @@ class Game:
             dead_players=[p.seat for p in self.players if not p.alive],
             memory=player.memory.copy(),
             history=self.state.history.copy(),
-            votes=self.state.votes.copy()
+            votes=self.state.votes.copy(),
         )
-            
+
+
 # TODO Insert Role implementations
 class StorytellerAI:
     pass
+
+
 class DumbStorytellerAI(StorytellerAI):
 
     def is_drunk_or_poisoned(self, player, game):
-        result = (hasattr(player, 'role') and player.role.name == "Drunk") or \
-                 (hasattr(game.state, 'drunk') and player in getattr(game.state, 'drunk', set())) or \
-                 (hasattr(game.state, 'poisoned') and player in getattr(game.state, 'poisoned', set()))
+        result = (
+            (hasattr(player, "role") and player.role.name == "Drunk")
+            or (
+                hasattr(game.state, "drunk")
+                and player in getattr(game.state, "drunk", set())
+            )
+            or (
+                hasattr(game.state, "poisoned")
+                and player in getattr(game.state, "poisoned", set())
+            )
+        )
         if result:
             print(f"DEBUG: {player.name} is drunk or poisoned.")
         return result
 
     def choose_two_townsfolk(self, washerwoman, game):
-        candidates = [(p, p.role.name) for p in game.players if p.role.alignment == Alignment.TOWNSFOLK and p.role.name != "Washerwoman"]
+        candidates = [
+            (p, p.role.name)
+            for p in game.players
+            if p.role.alignment == Alignment.TOWNSFOLK and p.role.name != "Washerwoman"
+        ]
         for p in game.players:
             if p.role.name == "Spy":
-                fake_role = random.choice([role for role in TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK] if role != "Washerwoman"])
+                fake_role = random.choice(
+                    [
+                        role
+                        for role in TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK]
+                        if role != "Washerwoman"
+                    ]
+                )
                 candidates.append((p, fake_role))
-        print(f"DEBUG: Washerwoman info candidates: {[(p.name, r) for p,r in candidates]}")
+        print(
+            f"DEBUG: Washerwoman info candidates: {[(p.name, r) for p,r in candidates]}"
+        )
         if not candidates:
             print("DEBUG: No valid Washerwoman candidates.")
             return None, None, None
@@ -635,23 +754,33 @@ class DumbStorytellerAI(StorytellerAI):
             other = random.choice(others)
             pair = [fake_real, other]
             random.shuffle(pair)
-            print(f"DEBUG: Washerwoman (drunk/poisoned) shows role {fake_role} and players {pair[0].name}, {pair[1].name}")
+            print(
+                f"DEBUG: Washerwoman (drunk/poisoned) shows role {fake_role} and players {pair[0].name}, {pair[1].name}"
+            )
             return fake_role, pair[0], pair[1]
         real, role_to_show = random.choice(candidates)
         others = [p for p in game.players if p != washerwoman and p != real]
         other = random.choice(others)
         pair = [real, other]
         random.shuffle(pair)
-        print(f"DEBUG: Washerwoman shows role {role_to_show} and players {pair[0].name}, {pair[1].name}")
-        return role_to_show, pair[0], pair[1]  
+        print(
+            f"DEBUG: Washerwoman shows role {role_to_show} and players {pair[0].name}, {pair[1].name}"
+        )
+        return role_to_show, pair[0], pair[1]
 
     def choose_two_outsiders(self, librarian, game):
-        candidates = [(p, p.role.name) for p in game.players if p.role.alignment == Alignment.OUTSIDER]
+        candidates = [
+            (p, p.role.name)
+            for p in game.players
+            if p.role.alignment == Alignment.OUTSIDER
+        ]
         for p in game.players:
             if p.role.name == "Spy":
                 fake_role = random.choice(TROUBLE_BREWING_ROLES[Alignment.OUTSIDER])
                 candidates.append((p, fake_role))
-        print(f"DEBUG: Librarian info candidates: {[(p.name, r) for p,r in candidates]}")
+        print(
+            f"DEBUG: Librarian info candidates: {[(p.name, r) for p,r in candidates]}"
+        )
         if not candidates:
             print("DEBUG: No valid Librarian candidates.")
             return None, None, None
@@ -664,25 +793,35 @@ class DumbStorytellerAI(StorytellerAI):
             other = random.choice(others)
             pair = [fake_real, other]
             random.shuffle(pair)
-            print(f"DEBUG: Librarian (drunk/poisoned) shows role {fake_role} and players {pair[0].name}, {pair[1].name}")
+            print(
+                f"DEBUG: Librarian (drunk/poisoned) shows role {fake_role} and players {pair[0].name}, {pair[1].name}"
+            )
             return fake_role, pair[0], pair[1]
         real, role_to_show = random.choice(candidates)
         others = [p for p in game.players if p != librarian and p != real]
         other = random.choice(others)
         pair = [real, other]
         random.shuffle(pair)
-        print(f"DEBUG: Librarian shows role {role_to_show} and players {pair[0].name}, {pair[1].name}")
-        return role_to_show, pair[0], pair[1]  
+        print(
+            f"DEBUG: Librarian shows role {role_to_show} and players {pair[0].name}, {pair[1].name}"
+        )
+        return role_to_show, pair[0], pair[1]
 
     def choose_two_minions(self, investigator, game):
-        minion_candidates = [(p, p.role.name) for p in game.players if p.role.alignment == Alignment.MINION]
+        minion_candidates = [
+            (p, p.role.name)
+            for p in game.players
+            if p.role.alignment == Alignment.MINION
+        ]
         recluse_candidates = [p for p in game.players if p.role.name == "Recluse"]
         minion_role_options = ["Poisoner", "Spy", "Scarlet Woman", "Baron"]
         candidates = minion_candidates.copy()
         for p in recluse_candidates:
             fake_role = random.choice(minion_role_options)
             candidates.append((p, fake_role))
-        print(f"DEBUG: Investigator info candidates: {[(p.name, r) for p,r in candidates]}")
+        print(
+            f"DEBUG: Investigator info candidates: {[(p.name, r) for p,r in candidates]}"
+        )
         if not candidates:
             print("DEBUG: No valid Investigator candidates.")
             return None, None, None
@@ -694,20 +833,26 @@ class DumbStorytellerAI(StorytellerAI):
             other = random.choice(others)
             pair = [fake_real, other]
             random.shuffle(pair)
-            print(f"DEBUG: Investigator (drunk/poisoned) shows role {fake_role} and players {pair[0].name}, {pair[1].name}")
+            print(
+                f"DEBUG: Investigator (drunk/poisoned) shows role {fake_role} and players {pair[0].name}, {pair[1].name}"
+            )
             return fake_role, pair[0], pair[1]
-        real, role_to_show  = random.choice(candidates)
+        real, role_to_show = random.choice(candidates)
         others = [p for p in game.players if p != investigator and p != real]
         other = random.choice(others)
         pair = [real, other]
         random.shuffle(pair)
-        print(f"DEBUG: Investigator shows role {role_to_show} and players {pair[0].name}, {pair[1].name}")
+        print(
+            f"DEBUG: Investigator shows role {role_to_show} and players {pair[0].name}, {pair[1].name}"
+        )
         return role_to_show, pair[0], pair[1]
 
     def evil_for_empath(self, player):
         if player.role.name == "Recluse":
             result = random.choice([True, False])
-            print(f"DEBUG: Empath checks {player.name} (Recluse), random evil? {result}")
+            print(
+                f"DEBUG: Empath checks {player.name} (Recluse), random evil? {result}"
+            )
             return result
         if player.role.name == "Spy":
             print(f"DEBUG: Empath checks {player.name} (Spy), always not evil.")
@@ -721,7 +866,9 @@ class DumbStorytellerAI(StorytellerAI):
         for p in alive_players:
             if p.role.name == "Recluse":
                 mapping[p] = random.choice([True, False])
-                print(f"DEBUG: Chef checks {p.name} (Recluse), random evil? {mapping[p]}")
+                print(
+                    f"DEBUG: Chef checks {p.name} (Recluse), random evil? {mapping[p]}"
+                )
             elif p.role.name == "Spy":
                 mapping[p] = random.choice([True, False])
                 print(f"DEBUG: Chef checks {p.name} (Spy), random evil? {mapping[p]}")
@@ -733,7 +880,9 @@ class DumbStorytellerAI(StorytellerAI):
     def give_empath_info(self, empath, game, true_evil_neighbors):
         if self.is_drunk_or_poisoned(empath, game):
             val = 0 if true_evil_neighbors >= 1 else 1
-            print(f"DEBUG: Empath ({empath.name}) is drunk/poisoned: giving {val} instead of {true_evil_neighbors}")
+            print(
+                f"DEBUG: Empath ({empath.name}) is drunk/poisoned: giving {val} instead of {true_evil_neighbors}"
+            )
             return val
         print(f"DEBUG: Empath ({empath.name}) is sober: giving {true_evil_neighbors}")
         return true_evil_neighbors
@@ -741,22 +890,34 @@ class DumbStorytellerAI(StorytellerAI):
     def give_chef_info(self, chef, game, true_evil_pairs):
         if self.is_drunk_or_poisoned(chef, game):
             rand_val = random.randint(0, 3)
-            print(f"DEBUG: Chef ({chef.name}) is drunk/poisoned: giving random {rand_val}")
+            print(
+                f"DEBUG: Chef ({chef.name}) is drunk/poisoned: giving random {rand_val}"
+            )
             return rand_val
         print(f"DEBUG: Chef ({chef.name}) is sober: giving {true_evil_pairs}")
         return true_evil_pairs
 
     def pick_red_herring(self, game):
-        candidates = [p for p in game.players if p.role.alignment != Alignment.DEMON and p.role.alignment != Alignment.MINION and p.role.name != "Recluse"]
+        candidates = [
+            p
+            for p in game.players
+            if p.role.alignment != Alignment.DEMON
+            and p.role.alignment != Alignment.MINION
+            and p.role.name != "Recluse"
+        ]
         pick = random.choice(candidates)
         print(f"DEBUG: Fortune Teller red herring is {pick.name}")
         return pick
 
     def fortune_teller_result(self, fortune_teller, pair, game):
-        print(f"DEBUG: Fortune Teller is checking {pair[0].name if pair[0] else None} and {pair[1].name if pair[1] else None}")
+        print(
+            f"DEBUG: Fortune Teller is checking {pair[0].name if pair[0] else None} and {pair[1].name if pair[1] else None}"
+        )
         if self.is_drunk_or_poisoned(fortune_teller, game):
             result = random.choice([True, False, False])
-            print(f"DEBUG: Fortune Teller ({fortune_teller.name}) is drunk/poisoned: random ping {result}")
+            print(
+                f"DEBUG: Fortune Teller ({fortune_teller.name}) is drunk/poisoned: random ping {result}"
+            )
             return result
         if not hasattr(game.state, "red_herring") or game.state.red_herring is None:
             game.state.red_herring = self.pick_red_herring(game)
@@ -785,18 +946,29 @@ class DumbStorytellerAI(StorytellerAI):
     def undertaker_info(self, undertaker, executed_player, game):
         if self.is_drunk_or_poisoned(undertaker, game):
             if random.random() < 0.7:
-                print(f"DEBUG: Undertaker ({undertaker.name}) is drunk/poisoned: giving actual role {executed_player.role.name}")
+                print(
+                    f"DEBUG: Undertaker ({undertaker.name}) is drunk/poisoned: giving actual role {executed_player.role.name}"
+                )
                 return executed_player.role.name
             else:
                 true_alignment = executed_player.role.alignment
-                all_alignments = [Alignment.TOWNSFOLK, Alignment.OUTSIDER, Alignment.MINION, Alignment.DEMON]
-                opposite_alignments = [a for a in TROUBLE_BREWING_ROLES if a != true_alignment]
+                all_alignments = [
+                    Alignment.TOWNSFOLK,
+                    Alignment.OUTSIDER,
+                    Alignment.MINION,
+                    Alignment.DEMON,
+                ]
+                opposite_alignments = [
+                    a for a in TROUBLE_BREWING_ROLES if a != true_alignment
+                ]
                 role_pool = []
                 for p in game.players:
                     if p.role.alignment in opposite_alignments:
                         role_pool.append(p.role.name)
                 pick = random.choice(role_pool)
-                print(f"DEBUG: Undertaker ({undertaker.name}) is drunk/poisoned: giving false role {pick}")
+                print(
+                    f"DEBUG: Undertaker ({undertaker.name}) is drunk/poisoned: giving false role {pick}"
+                )
                 return pick
         if executed_player.role.name == "Recluse":
             if random.choice([True, False]):
@@ -825,21 +997,30 @@ class DumbStorytellerAI(StorytellerAI):
             game.state.monk_protected = None
             return
         game.state.monk_protected = target
-        print(f"DEBUG: Monk ({monk.name}) protects {target.name if target else 'nobody'}.")
+        print(
+            f"DEBUG: Monk ({monk.name}) protects {target.name if target else 'nobody'}."
+        )
 
     def ravenkeeper_info(self, ravenkeeper, target, game):
         if self.is_drunk_or_poisoned(ravenkeeper, game):
             true_alignment = target.role.alignment
-            opposite_alignments = [a for a in TROUBLE_BREWING_ROLES if a != true_alignment]
+            opposite_alignments = [
+                a for a in TROUBLE_BREWING_ROLES if a != true_alignment
+            ]
             role_pool = []
             for align in opposite_alignments:
                 role_pool.extend(TROUBLE_BREWING_ROLES[align])
             pick = random.choice(role_pool)
-            print(f"DEBUG: Ravenkeeper ({ravenkeeper.name}) is drunk/poisoned: shown {pick} for {target.name}.")
+            print(
+                f"DEBUG: Ravenkeeper ({ravenkeeper.name}) is drunk/poisoned: shown {pick} for {target.name}."
+            )
             return pick
         if target.role.name == "Recluse":
             if random.choice([True, False]):
-                role_pool = TROUBLE_BREWING_ROLES[Alignment.MINION] + TROUBLE_BREWING_ROLES[Alignment.DEMON]
+                role_pool = (
+                    TROUBLE_BREWING_ROLES[Alignment.MINION]
+                    + TROUBLE_BREWING_ROLES[Alignment.DEMON]
+                )
                 pick = random.choice(role_pool)
                 print(f"DEBUG: Ravenkeeper sees Recluse as {pick}.")
                 return pick
@@ -855,7 +1036,9 @@ class DumbStorytellerAI(StorytellerAI):
                 pick = random.choice(TROUBLE_BREWING_ROLES[Alignment.OUTSIDER])
                 print(f"DEBUG: Ravenkeeper sees Spy as {pick}.")
                 return pick
-        print(f"DEBUG: Ravenkeeper sees true role {target.role.name} for {target.name}.")
+        print(
+            f"DEBUG: Ravenkeeper sees true role {target.role.name} for {target.name}."
+        )
         return target.role.name
 
     def virgin_nominator_registers_as_townsfolk(self, nominator, game):
@@ -864,26 +1047,34 @@ class DumbStorytellerAI(StorytellerAI):
             return True
         if nominator.role.name == "Spy":
             val = random.choice([True, False])
-            print(f"DEBUG: Virgin nomination: {nominator.name} is Spy, registers as Townsfolk? {val}")
+            print(
+                f"DEBUG: Virgin nomination: {nominator.name} is Spy, registers as Townsfolk? {val}"
+            )
             return val
         print(f"DEBUG: Virgin nomination: {nominator.name} is not a Townsfolk or Spy.")
         return False
 
     def virgin_nomination_check(self, virgin, nominator, game):
         if self.is_drunk_or_poisoned(virgin, game):
-            print(f"DEBUG: Virgin ({virgin.name}) is drunk/poisoned: ability does not trigger.")
+            print(
+                f"DEBUG: Virgin ({virgin.name}) is drunk/poisoned: ability does not trigger."
+            )
             return
         if self.virgin_nominator_registers_as_townsfolk(nominator, game):
             print(f"DEBUG: Virgin's ability triggers, executing {nominator.name}.")
             nominator.kill()
-            game.state.history.append(f"{nominator.name} was executed on day {game.state.day}.")
-            nominator.memory['executed_by_virgin'] = True
+            game.state.history.append(
+                f"{nominator.name} was executed on day {game.state.day}."
+            )
+            nominator.memory["executed_by_virgin"] = True
         else:
             print(f"DEBUG: Virgin's ability does NOT trigger for {nominator.name}.")
 
     def slayer_shot(self, slayer, target, game):
         if self.is_drunk_or_poisoned(slayer, game):
-            print(f"DEBUG: Slayer ({slayer.name}) is drunk/poisoned: shot does nothing.")
+            print(
+                f"DEBUG: Slayer ({slayer.name}) is drunk/poisoned: shot does nothing."
+            )
             return
         if target.role.alignment == Alignment.DEMON:
             print(f"DEBUG: Slayer shot and killed {target.name} (Demon)!")
@@ -895,7 +1086,9 @@ class DumbStorytellerAI(StorytellerAI):
             return
         if target.role.name == "Recluse":
             val = random.choice([True, False])
-            print(f"DEBUG: Slayer shot Recluse ({target.name}). Registers as demon? {val}")
+            print(
+                f"DEBUG: Slayer shot Recluse ({target.name}). Registers as demon? {val}"
+            )
             if val:
                 target.kill()
                 game.state.history.append(
@@ -904,49 +1097,63 @@ class DumbStorytellerAI(StorytellerAI):
                 return
         print(f"DEBUG: Slayer shot {target.name}, but nothing happened.")
 
-
     def resolve_demon_kill(self, demon, target, game):
         print(f"DEBUG: Demon ({demon.name}) is trying to kill {target.name}.")
         if self.is_drunk_or_poisoned(demon, game):
             return
-        
+
         if not target.alive:
             return
 
-        mayor_bounce = [p for p in game.players if p.alive and p.role.alignment != Alignment.DEMON]
+        mayor_bounce = [
+            p for p in game.players if p.alive and p.role.alignment != Alignment.DEMON
+        ]
         if target.role.name == "Mayor" and not self.is_drunk_or_poisoned(target, game):
             redirect_target = random.choice(mayor_bounce)
             if redirect_target != target:
-                print(f"DEBUG: Mayor bounce! Redirecting kill from {target.name} to {redirect_target.name}.")
+                print(
+                    f"DEBUG: Mayor bounce! Redirecting kill from {target.name} to {redirect_target.name}."
+                )
             else:
                 print(f"DEBUG: Mayor self-bounce! Kill remains on {target.name}.")
             target = redirect_target
 
-        if hasattr(game.state, 'monk_protected') and game.state.monk_protected == target:
+        if (
+            hasattr(game.state, "monk_protected")
+            and game.state.monk_protected == target
+        ):
             print(f"DEBUG: Target {target.name} is protected by the Monk.")
             return
 
-        if target.role.name == "Soldier" and not self.is_drunk_or_poisoned(target, game):
+        if target.role.name == "Soldier" and not self.is_drunk_or_poisoned(
+            target, game
+        ):
             print(f"DEBUG: Target {target.name} is the Soldier and cannot be killed.")
             return
 
         if target.role.name == "Ravenkeeper":
-            print(f"DEBUG: Ravenkeeper ({target.name}) is dying at night! Triggering their ability.")
+            print(
+                f"DEBUG: Ravenkeeper ({target.name}) is dying at night! Triggering their ability."
+            )
             game.state.pending_deaths.add(target.seat)
             game.state.history.append(f"{target.name} was killed in the night.")
-            
+
             checked = target.choose_ravenkeeper_reveal(game)
             shown_role = self.ravenkeeper_info(target, checked, game)
-            target.memory['info'] = {
+            target.memory["info"] = {
                 "checked": checked.name if checked else None,
-                "role": shown_role
+                "role": shown_role,
             }
-            print(f"RAVENKEEPER INFO: {target.name} (dead) checked {checked.name}: role is {shown_role}")
+            print(
+                f"RAVENKEEPER INFO: {target.name} (dead) checked {checked.name}: role is {shown_role}"
+            )
             return
 
         if demon == target:
             print(f"DEBUG: Imp is trying to star-pass (suicide).")
-            sw_candidates = [p for p in game.players if p.role.name == "Scarlet Woman" and p.alive]
+            sw_candidates = [
+                p for p in game.players if p.role.name == "Scarlet Woman" and p.alive
+            ]
             if sw_candidates:
                 sw = sw_candidates[0]
                 print(f"DEBUG: Scarlet Woman ({sw.name}) becomes new Imp.")
@@ -954,10 +1161,16 @@ class DumbStorytellerAI(StorytellerAI):
                 game.state.pending_deaths.add(demon.seat)
                 game.state.history.append(f"{target.name} was killed in the night.")
                 return
-            minion_candidates = [p for p in game.players if p.role.alignment == Alignment.MINION and p.alive and p != demon]
+            minion_candidates = [
+                p
+                for p in game.players
+                if p.role.alignment == Alignment.MINION and p.alive and p != demon
+            ]
             if minion_candidates:
                 new_imp = random.choice(minion_candidates)
-                print(f"DEBUG: No Scarlet Woman; {new_imp.name} (Minion) becomes the new Imp.")
+                print(
+                    f"DEBUG: No Scarlet Woman; {new_imp.name} (Minion) becomes the new Imp."
+                )
                 new_imp.role = Imp(self)
                 game.state.pending_deaths.add(demon.seat)
                 game.state.history.append(f"{target.name} was killed in the night.")
@@ -965,31 +1178,25 @@ class DumbStorytellerAI(StorytellerAI):
             else:
                 print(f"DEBUG: Imp suicides, no one to inherit Demonhood.")
                 game.state.pending_deaths.add(demon.seat)
-                game.state.history.append(
-                    f"{target.name} was killed in the night."
-                )
+                game.state.history.append(f"{target.name} was killed in the night.")
                 return
 
         print(f"DEBUG: Demon kill successful, {target.name} dies.")
         game.state.pending_deaths.add(target.seat)
-        game.state.history.append(
-            f"{target.name} was killed in the night."
-        )
+        game.state.history.append(f"{target.name} was killed in the night.")
 
     def poison_player(self, poisoner, target, game):
-        if not hasattr(game.state, 'poisoned'):
+        if not hasattr(game.state, "poisoned"):
             game.state.poisoned = set()
         game.state.poisoned.add(target)
         print(f"DEBUG: Poisoner ({poisoner.name}) poisons {target.name} this night.")
 
     def spy_night_info(self, spy, game):
         role_map = {p.name: p.role.name for p in game.players}
-        demon_bluffs = getattr(game.state, 'demon_bluffs', [])
+        demon_bluffs = getattr(game.state, "demon_bluffs", [])
         print(f"DEBUG: Spy ({spy.name}) sees all roles: {role_map}")
-        return {
-            "all_roles": role_map,
-            "demon_bluffs": demon_bluffs
-        }
+        return {"all_roles": role_map, "demon_bluffs": demon_bluffs}
+
 
 class Washerwoman(Role):
     def __init__(self, storyteller_ai):
@@ -998,11 +1205,14 @@ class Washerwoman(Role):
 
     def night_action(self, player, game):
         if game.state.night == 1:
-            role_to_show, p1, p2 = self.storyteller_ai.choose_two_townsfolk(player, game)
-            player.memory['info'] = {
+            role_to_show, p1, p2 = self.storyteller_ai.choose_two_townsfolk(
+                player, game
+            )
+            player.memory["info"] = {
                 "role": role_to_show,
-                "players": (p1.name if p1 else None, p2.name if p2 else None)
+                "players": (p1.name if p1 else None, p2.name if p2 else None),
             }
+
 
 class Librarian(Role):
     def __init__(self, storyteller_ai):
@@ -1011,11 +1221,14 @@ class Librarian(Role):
 
     def night_action(self, player, game):
         if game.state.night == 1:
-            role_to_show, p1, p2 = self.storyteller_ai.choose_two_outsiders(player, game)
-            player.memory['info'] = {
+            role_to_show, p1, p2 = self.storyteller_ai.choose_two_outsiders(
+                player, game
+            )
+            player.memory["info"] = {
                 "role": role_to_show,
-                "players": (p1.name if p1 else None, p2.name if p2 else None)
+                "players": (p1.name if p1 else None, p2.name if p2 else None),
             }
+
 
 class Investigator(Role):
     def __init__(self, storyteller_ai):
@@ -1025,10 +1238,11 @@ class Investigator(Role):
     def night_action(self, player, game):
         if game.state.night == 1:
             role_to_show, p1, p2 = self.storyteller_ai.choose_two_minions(player, game)
-            player.memory['info'] = {
+            player.memory["info"] = {
                 "role": role_to_show,
-                "players": (p1.name if p1 else None, p2.name if p2 else None)
+                "players": (p1.name if p1 else None, p2.name if p2 else None),
             }
+
 
 class Chef(Role):
     def __init__(self, storyteller_ai):
@@ -1048,7 +1262,8 @@ class Chef(Role):
                 if evilness_map[p1] and evilness_map[p2]:
                     evil_pairs += 1
             chef_info = self.storyteller_ai.give_chef_info(player, game, evil_pairs)
-            player.memory['info'] = chef_info
+            player.memory["info"] = chef_info
+
 
 class Empath(Role):
     def __init__(self, storyteller_ai):
@@ -1068,11 +1283,14 @@ class Empath(Role):
                 if self.storyteller_ai.evil_for_empath(neighbor):
                     evil_count += 1
         empath_info = self.storyteller_ai.give_empath_info(player, game, evil_count)
-        player.memory.setdefault('info', []).append({
-            "night": game.state.night,
-            "neighbors": [left.name, right.name],
-            "evil_count": empath_info
-        })
+        player.memory.setdefault("info", []).append(
+            {
+                "night": game.state.night,
+                "neighbors": [left.name, right.name],
+                "evil_count": empath_info,
+            }
+        )
+
 
 class FortuneTeller(Role):
     def __init__(self, storyteller_ai):
@@ -1082,11 +1300,14 @@ class FortuneTeller(Role):
     def night_action(self, player, game):
         pair = player.choose_fortune_teller_targets(game)
         is_ping = self.storyteller_ai.fortune_teller_result(player, pair, game)
-        player.memory.setdefault('info', []).append({
-            "night": game.state.night,
-            "players": (pair[0].name, pair[1].name),
-            "ping": is_ping
-        })
+        player.memory.setdefault("info", []).append(
+            {
+                "night": game.state.night,
+                "players": (pair[0].name, pair[1].name),
+                "ping": is_ping,
+            }
+        )
+
 
 class Undertaker(Role):
     def __init__(self, storyteller_ai):
@@ -1095,16 +1316,21 @@ class Undertaker(Role):
 
     def night_action(self, player, game):
         # Should be called the night after an execution
-        executed_player = game.state.executed_today if hasattr(game.state, 'executed_today') else None
+        executed_player = (
+            game.state.executed_today if hasattr(game.state, "executed_today") else None
+        )
         if executed_player is None:
             return
         # Info may be fuzzed by StorytellerAI (e.g. for Recluse, poison, etc.)
         shown_role = self.storyteller_ai.undertaker_info(player, executed_player, game)
-        player.memory.setdefault('info', []).append({
-            "night": game.state.night,
-            "executed": executed_player.name,
-            "role": shown_role
-        })
+        player.memory.setdefault("info", []).append(
+            {
+                "night": game.state.night,
+                "executed": executed_player.name,
+                "role": shown_role,
+            }
+        )
+
 
 class Monk(Role):
     def __init__(self, storyteller_ai):
@@ -1115,11 +1341,13 @@ class Monk(Role):
         if game.state.night > 1:
             target = player.choose_monk_protect(game)
             self.storyteller_ai.monk_protect(player, target, game)
-            player.memory.setdefault('info', []).append({
-                "night": game.state.night,
-                "executed": target.name if target else None,
-            })
-            
+            player.memory.setdefault("info", []).append(
+                {
+                    "night": game.state.night,
+                    "executed": target.name if target else None,
+                }
+            )
+
 
 class Ravenkeeper(Role):
     def __init__(self, storyteller_ai):
@@ -1141,6 +1369,7 @@ class Virgin(Role):
             return
         self.storyteller_ai.virgin_nomination_check(player, nominator, game)
 
+
 class Slayer(Role):
     def __init__(self, storyteller_ai):
         super().__init__("Slayer", Alignment.TOWNSFOLK)
@@ -1159,13 +1388,16 @@ class Slayer(Role):
         self.has_shot = True
         self.storyteller_ai.slayer_shot(player, target, game)
 
+
 class Soldier(Role):
     def __init__(self):
         super().__init__("Soldier", Alignment.TOWNSFOLK)
 
+
 class Mayor(Role):
     def __init__(self):
         super().__init__("Mayor", Alignment.TOWNSFOLK)
+
 
 class Butler(Role):
     def __init__(self):
@@ -1174,14 +1406,18 @@ class Butler(Role):
     def night_action(self, player, game):
         target = player.choose_master(game)
         self.master = target
-        player.memory.setdefault('info', []).append({
-            "night": game.state.night,
-            "master": target.name if target else None,
-        })
+        player.memory.setdefault("info", []).append(
+            {
+                "night": game.state.night,
+                "master": target.name if target else None,
+            }
+        )
+
 
 class Recluse(Role):
     def __init__(self):
         super().__init__("Recluse", Alignment.OUTSIDER)
+
 
 class Drunk(Role):
     def __init__(self, storyteller_ai, cover_role_name):
@@ -1205,10 +1441,12 @@ class Drunk(Role):
             self.assign_cover_role(game)
         self.cover_role.day_action(player, game)
 
+
 class Saint(Role):
     def __init__(self, storyteller_ai):
         super().__init__("Saint", Alignment.OUTSIDER)
         self.storyteller_ai = storyteller_ai
+
 
 class Poisoner(Role):
     def __init__(self, storyteller_ai):
@@ -1219,7 +1457,8 @@ class Poisoner(Role):
         # Player/AI chooses a poison target (not self, per rules, but you can allow it for testing)
         target = player.choose_poisoner_target(game)
         self.storyteller_ai.poison_player(player, target, game)
-        player.memory['poisoned'] = target.name if target else None
+        player.memory["poisoned"] = target.name if target else None
+
 
 class Spy(Role):
     def __init__(self, storyteller_ai):
@@ -1229,17 +1468,20 @@ class Spy(Role):
     def night_action(self, player, game):
         # See all roles (and which bluffs Demon is using)
         info = self.storyteller_ai.spy_night_info(player, game)
-        player.memory['info'] = info
+        player.memory["info"] = info
+
 
 class Baron(Role):
     def __init__(self, storyteller_ai):
         super().__init__("Baron", Alignment.MINION)
         self.storyteller_ai = storyteller_ai
 
+
 class ScarletWoman(Role):
     def __init__(self, storyteller_ai):
         super().__init__("Scarlet Woman", Alignment.MINION)
         self.storyteller_ai = storyteller_ai
+
 
 class Imp(Role):
     def __init__(self, storyteller_ai):
@@ -1250,20 +1492,22 @@ class Imp(Role):
         if game.state.night > 1:
             target = player.choose_imp_kill(game)
             self.storyteller_ai.resolve_demon_kill(player, target, game)
-            player.memory['kill_target'] = target.name if target else None
+            player.memory["kill_target"] = target.name if target else None
+
 
 if __name__ == "__main__":
     roles = [
         Washerwoman(DumbStorytellerAI()),
         Librarian(DumbStorytellerAI()),
         Investigator(DumbStorytellerAI()),
-        Chef(DumbStorytellerAI(),),
+        Chef(
+            DumbStorytellerAI(),
+        ),
         Undertaker(DumbStorytellerAI()),
         Saint(DumbStorytellerAI()),
         ScarletWoman(DumbStorytellerAI()),
-        Imp(DumbStorytellerAI())
-    ] # Insert roles
+        Imp(DumbStorytellerAI()),
+    ]  # Insert roles
     player_names = [f"Player {i+1}" for i in range(len(roles))]
     game = Game(player_names, roles)
     game.run()
-    
