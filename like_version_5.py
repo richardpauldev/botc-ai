@@ -294,6 +294,8 @@ def process_washerwoman(world: WorldState, night: int, TB_ROLES) -> bool:
         if players and role:
             a, b = players
             if world.roles.get(a) != role and world.roles.get(b) != role:
+                if world.roles.get(a) == "Spy" or world.roles.get(b) == "Spy":
+                    return True
                 return False
     return True
 
@@ -309,6 +311,8 @@ def process_librarian(world: WorldState, night: int, TB_ROLES) -> bool:
                 return False
         else:
             if not any(world.roles.get(p) == role for p in players):
+                if any(world.roles.get(p) == "Spy" for p in players):
+                    return True
                 return False
     return True
 
@@ -330,7 +334,7 @@ def process_undertaker(world: WorldState, night: int, TB_ROLES) -> bool:
             if entry.get("night") == night:
                 executed = entry.get("executed_player")
                 seen_role = entry.get("seen_role")
-                if world.roles.get(executed) != seen_role:
+                if world.roles.get(executed) != seen_role and not world.roles.get(executed) == "Spy":
                     return False
     return True
 
@@ -340,7 +344,7 @@ def process_ravenkeeper(world: WorldState, night: int, TB_ROLES) -> bool:
     for info in _trustworthy_claims(world, "ravenkeeper"):
         # print(info)
         if info.get("night") == night:
-            if world.roles.get(info.get("seen_player")) != info.get("seen_role"):
+            if world.roles.get(info.get("seen_player")) != info.get("seen_role") and not world.roles.get(info.get("seen_player")) == "Spy":
                 return False
     return True
 
@@ -373,16 +377,11 @@ def process_virgin(world: WorldState, night: int, TB_ROLES) -> bool:
             claimer = info.get("claimer")
             if nom:
                 nom_role = world.roles.get(nom)
-                if died and nom_role not in townsfolk:
+                if died and nom_role not in townsfolk and nom_role != "Spy":
                     return False
                 if not died and nom_role in townsfolk:
                     return False
-            if died and claimer:
-                r = world.roles.get(claimer)
-                evil = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
-                if r in evil or r == "Drunk":
-                    return False
-    return True
+    return True 
 
 
 def process_empath(world: WorldState, night: int, TB_ROLES) -> bool:
@@ -392,7 +391,11 @@ def process_empath(world: WorldState, night: int, TB_ROLES) -> bool:
             if entry.get("night") == night:
                 neighbors = [entry.get("neighbor1"), entry.get("neighbor2")]
                 count = sum(1 for p in neighbors if world.roles.get(p) in evil)
-                if count != entry.get("num_evil"):
+                spy_nieghbor = any(True for p in neighbors if world.roles.get(p) == "Spy")
+                if spy_nieghbor:
+                    if count != entry.get("num_evil") - 1 or count != entry.get("num_evil"):
+                        return False
+                elif count != entry.get("num_evil"):
                     return False
     return True
 
@@ -418,16 +421,38 @@ def process_chef(world: WorldState, night: int, TB_ROLES) -> bool:
         pairs = info.get("pairs")
         if pairs is None:
             continue
-        players = sorted(world.roles)
-        evil = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []) + ["Recluse"])
-        count = 0
-        prev_evil = world.roles[players[-1]] in evil
-        for p in players:
-            cur_evil = world.roles[p] in evil
-            if prev_evil and cur_evil:
-                count += 1
-            prev_evil = cur_evil
-        if count != pairs:
+        players = sorted(world.roles)  # Or whatever order you want
+        
+        roles = [world.roles[p] for p in players]
+        evil_roles = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
+        ambiguous_indexes = [i for i, r in enumerate(roles) if r in {"Spy", "Recluse"}]
+        # Prepare base evil list, with ambiguous as None
+        base_evil = []
+        for r in roles:
+            if r in evil_roles:
+                base_evil.append(True)
+            elif r in {"Spy", "Recluse"}:
+                base_evil.append(None)
+            else:
+                base_evil.append(False)
+        
+        # For each combination of ambiguous roles as evil/good
+        bounds = []
+        for assignment in itertools.product([False, True], repeat=len(ambiguous_indexes)):
+            evil_list = base_evil[:]
+            for idx, as_evil in zip(ambiguous_indexes, assignment):
+                evil_list[idx] = as_evil
+            count = 0
+            prev = evil_list[-1]
+            for cur in evil_list:
+                if prev and cur:
+                    count += 1
+                prev = cur
+            bounds.append(count)
+        
+        min_pairs = min(bounds)
+        max_pairs = max(bounds)
+        if not (min_pairs <= pairs <= max_pairs):
             return False
     return True
 
