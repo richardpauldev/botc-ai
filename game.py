@@ -1,3 +1,4 @@
+from __future__ import annotations
 from enum import Enum, auto
 import random
 from dataclasses import dataclass, field
@@ -32,7 +33,7 @@ class PlayerView:
     phase: Phase
     day: int
     night: int
-    role_claim: str
+    role_claim: dict | None
     is_alive: bool
     public_claims: dict
     alive_players: list
@@ -118,6 +119,18 @@ TROUBLE_BREWING_ROLES = {
     Alignment.MINION: ["Poisoner", "Scarlet Woman", "Spy", "Baron"],
     Alignment.DEMON: ["Imp"],
 }
+
+
+def player_role_counts(num_players: int) -> tuple[int, int]:
+    """Return (minion_count, outsider_count) for a game size."""
+    outsider_count = (num_players - 1) % 3
+    if num_players <= 9:
+        minions = 1
+    elif num_players <= 12:
+        minions = 2
+    else:
+        minions = 3
+    return minions, outsider_count
 
 
 class PlayerController:
@@ -239,7 +252,7 @@ class EmpathController(PlayerController):
         return super().set_player(player)
 
     def get_latest_empath_info(self, player_view: PlayerView):
-        info_list = player_view.memory.get("info", [])
+        info_list = player_view.memory.get("night_results", [])
         return info_list[-1] if info_list else None
 
     def get_neighbor_seats(self, player_view: PlayerView):
@@ -250,21 +263,21 @@ class EmpathController(PlayerController):
         }
         latest_info = self.get_latest_empath_info(player_view)
         if latest_info:
-            left = name_to_seat.get(latest_info["neighbors"][0])
-            right = name_to_seat.get(latest_info["neighbors"][1])
+            left = name_to_seat.get(latest_info["player1"])
+            right = name_to_seat.get(latest_info["player2"])
             return [left, right]
         return []
 
     def suspicion_scores(self, player_view: PlayerView):
         suspicion = {}
-        info_list = player_view.memory.get("info", [])
+        info_list = player_view.memory.get("night_results", [])
         if not info_list:
             return suspicion
 
         # Accumulate scores across all nights for each neighbor
         for entry in info_list:
-            evil_count = entry["evil_count"]
-            neighbors = entry["neighbors"]
+            evil_count = entry["num_evil"]
+            neighbors = [entry["player1"], entry["player2"]]
             # Assign suspicion based on evil_count each night
             if evil_count == 0:
                 for n in neighbors:
@@ -282,7 +295,7 @@ class EmpathController(PlayerController):
         if not latest_info:
             return False
 
-        neighbors = latest_info["neighbors"]
+        neighbors = [latest_info["player1"], latest_info["player2"]]
         suspicion = self.suspicion_scores(player_view)
         nominee_name = nominee.name
         # Vote for a suspicious neighbor
@@ -293,13 +306,13 @@ class EmpathController(PlayerController):
 
     def share_info(self, game, self_player, context=None):
         if not self.has_claimed:
-            info_list = self_player.player_view.memory.get("info", [])
+            info_list = self_player.player_view.memory.get("night_results", [])
             if info_list:
                 # Summarize all nights
                 msg = "I am the Empath. My info:\n"
                 msg += "\n".join(
                     [
-                        f"N{entry['night']}: Neighbors {entry['neighbors'][0]} & {entry['neighbors'][1]} - Evil Count: {entry['evil_count']}"
+                        f"N{entry['night']}: Neighbors {entry['player1']} & {entry['player2']} - Evil Count: {entry['num_evil']}"
                         for entry in info_list
                     ]
                 )
@@ -314,8 +327,8 @@ class EmpathController(PlayerController):
             latest = self.get_latest_empath_info(self_player.player_view)
             if latest:
                 msg = (
-                    f"Night {latest['night']}: Neighbors {latest['neighbors'][0]}, "
-                    f"{latest['neighbors'][1]}; Evil Count: {latest['evil_count']}"
+                    f"Night {latest['night']}: Neighbors {latest['player1']}, "
+                    f"{latest['player2']}; Evil Count: {latest['num_evil']}"
                 )
                 for player in game.players:
                     self.send_info(
@@ -333,6 +346,7 @@ class Player:
     role: Role | None = None
     alive: bool = True
     memory: dict = field(default_factory=dict)
+    claim: dict | None = None
     votes_today: int = 0
     has_used_dead_vote: bool = False
 
@@ -437,6 +451,8 @@ class Game:
         random.shuffle(roles)
         for player, role in zip(self.players, roles):
             player.assign_role(role)
+            # Default claim uses deduction-engine fields
+            player.claim = {"role": role.name}
 
     def assign_evil_info_and_bluffs(self):
         evil_team = [
@@ -659,6 +675,8 @@ class Game:
         print("\nGame over! Final state:")
         for p in self.players:
             print(p)
+        # After the game ends, run deduction analysis on the final game state
+        self.run_deduction()
 
     def resolve_scarlet_woman(self, killed_player):
         if killed_player.role.name != "Imp":
@@ -698,6 +716,37 @@ class Game:
             history=self.state.history.copy(),
             votes=self.state.votes.copy(),
         )
+
+    def run_deduction(self):
+        """Run the deduction engine on the current game state and print results."""
+        from deduction_engine import (
+            generate_all_worlds,
+            deduction_pipeline,
+            compute_role_probs,
+        )
+
+        player_names = [p.name for p in self.players]
+        TB_ROLES = {a.value if hasattr(a, "value") else a: roles for a, roles in TROUBLE_BREWING_ROLES.items()}
+
+        all_minion_roles = TB_ROLES["Minion"]
+        m_minions, outsider_count = player_role_counts(len(self.players))
+
+        claims = {p.name: p.claim for p in self.players if p.claim}
+
+        worlds = generate_all_worlds(
+            player_names,
+            all_minion_roles,
+            m_minions,
+            claims,
+            TB_ROLES,
+            outsider_count,
+            deaths=[],
+        )
+        deduced = deduction_pipeline(worlds, TB_ROLES)
+        evil_prob, imp_prob = compute_role_probs(deduced, player_names, TB_ROLES)
+        print("\nDeduction results:")
+        for name in player_names:
+            print(f"{name}: {evil_prob[name]:.1f}% evil, {imp_prob[name]:.1f}% Imp")
 
 
 # TODO Insert Role implementations
@@ -1141,8 +1190,9 @@ class DumbStorytellerAI(StorytellerAI):
             checked = target.choose_ravenkeeper_reveal(game)
             shown_role = self.ravenkeeper_info(target, checked, game)
             target.memory["info"] = {
-                "checked": checked.name if checked else None,
-                "role": shown_role,
+                "night": game.state.night,
+                "seen_player": checked.name if checked else None,
+                "seen_role": shown_role,
             }
             print(
                 f"RAVENKEEPER INFO: {target.name} (dead) checked {checked.name}: role is {shown_role}"
@@ -1209,8 +1259,8 @@ class Washerwoman(Role):
                 player, game
             )
             player.memory["info"] = {
-                "role": role_to_show,
-                "players": (p1.name if p1 else None, p2.name if p2 else None),
+                "seen_role": role_to_show,
+                "seen_players": [p1.name if p1 else None, p2.name if p2 else None],
             }
 
 
@@ -1225,8 +1275,8 @@ class Librarian(Role):
                 player, game
             )
             player.memory["info"] = {
-                "role": role_to_show,
-                "players": (p1.name if p1 else None, p2.name if p2 else None),
+                "seen_role": role_to_show,
+                "seen_players": [p1.name if p1 else None, p2.name if p2 else None],
             }
 
 
@@ -1239,8 +1289,8 @@ class Investigator(Role):
         if game.state.night == 1:
             role_to_show, p1, p2 = self.storyteller_ai.choose_two_minions(player, game)
             player.memory["info"] = {
-                "role": role_to_show,
-                "players": (p1.name if p1 else None, p2.name if p2 else None),
+                "seen_role": role_to_show,
+                "seen_players": [p1.name if p1 else None, p2.name if p2 else None],
             }
 
 
@@ -1262,7 +1312,7 @@ class Chef(Role):
                 if evilness_map[p1] and evilness_map[p2]:
                     evil_pairs += 1
             chef_info = self.storyteller_ai.give_chef_info(player, game, evil_pairs)
-            player.memory["info"] = chef_info
+            player.memory["info"] = {"pairs": chef_info}
 
 
 class Empath(Role):
@@ -1283,11 +1333,12 @@ class Empath(Role):
                 if self.storyteller_ai.evil_for_empath(neighbor):
                     evil_count += 1
         empath_info = self.storyteller_ai.give_empath_info(player, game, evil_count)
-        player.memory.setdefault("info", []).append(
+        player.memory.setdefault("night_results", []).append(
             {
                 "night": game.state.night,
-                "neighbors": [left.name, right.name],
-                "evil_count": empath_info,
+                "player1": left.name,
+                "player2": right.name,
+                "num_evil": empath_info,
             }
         )
 
@@ -1300,10 +1351,11 @@ class FortuneTeller(Role):
     def night_action(self, player, game):
         pair = player.choose_fortune_teller_targets(game)
         is_ping = self.storyteller_ai.fortune_teller_result(player, pair, game)
-        player.memory.setdefault("info", []).append(
+        player.memory.setdefault("night_results", []).append(
             {
                 "night": game.state.night,
-                "players": (pair[0].name, pair[1].name),
+                "player1": pair[0].name if pair[0] else None,
+                "player2": pair[1].name if pair[1] else None,
                 "ping": is_ping,
             }
         )
@@ -1323,11 +1375,11 @@ class Undertaker(Role):
             return
         # Info may be fuzzed by StorytellerAI (e.g. for Recluse, poison, etc.)
         shown_role = self.storyteller_ai.undertaker_info(player, executed_player, game)
-        player.memory.setdefault("info", []).append(
+        player.memory.setdefault("night_results", []).append(
             {
                 "night": game.state.night,
-                "executed": executed_player.name,
-                "role": shown_role,
+                "executed_player": executed_player.name,
+                "seen_role": shown_role,
             }
         )
 
