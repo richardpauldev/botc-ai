@@ -49,7 +49,6 @@ def generate_all_worlds(
                         1 for p in trustworthy
                         if claims.get(p, {}).get("role") in TB_ROLES["Outsider"]
                     )
-                    # --- NEW LOGIC: If outsider claims > expected, must have Baron ---
                     if num_trustworthy_outsiders > outsider_count:
                         if "Baron" not in minion_role_combo_set:
                             continue  # Skip worlds without Baron
@@ -90,7 +89,6 @@ def generate_all_worlds(
                         # Outsider count doesn't match: must "remove" a trustworthy to allow Drunk as evil
                         for drunk_player in trustworthy:
                             reduced_trustworthy = [p for p in trustworthy if p != drunk_player]
-                            # Now choose Drunk from the evil team (not a minion/imp who claims outsider)
                             # Only assign Drunk to someone who is not already claiming outsider
                             if claims.get(drunk_player, {}).get("role") in TB_ROLES["Outsider"]:
                                 continue
