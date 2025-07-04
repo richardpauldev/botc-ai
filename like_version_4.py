@@ -465,42 +465,36 @@ def process_ravenkeeper(world, TB_ROLES, setup_counts):
                                 drunk_world["possible_roles_per_untrustworthy"][other] -= {"Drunk"}
                         if enforce_required_minions(drunk_world, TB_ROLES, setup_counts):
                             next_worlds.append(drunk_world)
-
-                            def get_red_herring_constraint(constraints):
-                            for c in constraints:
-                                if "red herring" in c:
-                                    return c["red herring"]
-                            return None
                 
                 #TODO, add to world list of night deaths
-                if seen_player in demon_roles: # Starpass must have happened
-                    if seen_player in world["night_death"]: 
-                        # I don't remember exactly how python data structures work, is this right?
-                        ball_history = None
-                        for c in world["constraints"]:
-                            if "imp ball" in c:
-                                ball_history = c["imp ball"]
-                        if not ball_history:
-                            ball_history = dict()
+                # if seen_player in demon_roles: # Starpass must have happened
+                #     if seen_player in world["night_death"]: 
+                #         # I don't remember exactly how python data structures work, is this right?
+                #         ball_history = None
+                #         for c in world["constraints"]:
+                #             if "imp ball" in c:
+                #                 ball_history = c["imp ball"]
+                #         if not ball_history:
+                #             ball_history = dict()
                             
-                        if world["death_time"][seen_player] in ball_history:
-                            ball_day = ball_history[world["death_time"][seen_player]]
-                            if "thrown" in ball_day:
-                                continue
-                            else: 
-                                ball_day.append({"thrown": seen_player}) 
-                                # I need this to be changed in c["imp ball"] will this happen currently?
-                        else:
-                            ball_history[world["death_time"][seen_player]] = {"thrown": seen_player}
-                        world["constraints"]["imp ball"] = ball_history
+                #         if world["death_time"][seen_player] in ball_history:
+                #             ball_day = ball_history[world["death_time"][seen_player]]
+                #             if "thrown" in ball_day:
+                #                 continue
+                #             else: 
+                #                 ball_day.append({"thrown": seen_player}) 
+                #                 # I need this to be changed in c["imp ball"] will this happen currently?
+                #         else:
+                #             ball_history[world["death_time"][seen_player]] = {"thrown": seen_player}
+                #         world["constraints"]["imp ball"] = ball_history
 
                         
                         
-                        if world["contraints"] has 
-                    elif setup_counts["Minion"] > 1:
-                        pass
-                    else:
-                        continue
+                #         if world["contraints"] has 
+                #     elif setup_counts["Minion"] > 1:
+                #         pass
+                #     else:
+                #         continue
                         
                 if seen_role in evil_roles:
                     if seen_role in w["possible_roles_per_untrustworthy"][seen_player]:

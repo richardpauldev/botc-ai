@@ -133,6 +133,7 @@ def _max_night_from_world(world: WorldState) -> int:
     """Return the maximum referenced night number in a world."""
     max_n = 1
     for c in world.claims.values():
+        print(c)
         n = c.get("night")
         if isinstance(n, int) and n > max_n:
             max_n = n
@@ -453,9 +454,80 @@ if __name__ == "__main__":
     all_minion_roles = ["Poisoner", "Scarlet Woman", "Baron", "Spy"]
     m_minions = 1
     claims = {
-        # Players may claim a single role or provide multiple options
-        "Bob": {"role": "Recluse"},
-        "Alice": {"roles": ["Chef", "Investigator"]},
+        "Alice": {
+            "role": "Fortune Teller",
+            "night_results": [
+                {"night": 1, "ping": True, "player1": "Alice", "player2": "Eve"},
+                {"night": 2, "ping": True, "player1": "Bob", "player2": "Fiona"},
+                {"night": 3, "ping": True, "player1": "Alice", "player2": "Carol"},
+
+            ],
+            # "dead": True
+        },
+        "Bob": {
+            "role": "Recluse",
+            # "night_results": [
+            #     {"night": 1, "ping": True, "player1": "Bob", "player2": "Fiona"},
+            #     {"night": 2, "ping": False, "player1": "Bob", "player2": "Eve"}
+            # ],
+            # "dead": True
+        },
+        "Carol": {
+            "role": "Slayer",
+            # "dead": True
+            # "shot_player": "Fiona",
+            # "died": False,
+            # "night": 2
+            # "night_results": [
+            #     {"night": 2, "executed_player": "Fiona", "seen_role": "Chef"},
+            #     # {"night": 3, "executed_player": "Dave", "seen_role": "Investigator"},
+            #     # {"night": 4, "executed_player": "Gina", "seen_role": "Chef"}
+            # ],
+            # "dead": True
+        },
+        "Dave": {
+            "role": "Ravenkeeper",
+            "seen_player": "Carol",
+            "seen_role": "Slayer",
+            "night": 3,
+            # "dead": True
+            # "night_results": [
+            #     {"night": 1, "num_evil": 1, "neighbor1": "Carol", "neighbor2": "Eve"}
+            # ],
+            # "dead": True
+        },
+        "Eve": {
+            "role": "Washerwoman",
+            "seen_role": "Virgin",
+            "seen_players": ["Dave", "Fiona"],
+            # "dead": True
+            # "night": 2,
+            # "seen_role": "Empath",
+            # "seen_player": "Gina"
+        },
+        "Frank": {
+            "role": "Virgin",
+            # "night_results": [
+            #     {"night": 2, "seen_role": "Imp", "executed_player": "Dave"},
+            #     {"night": 3, "seen_role": "Fortune Teller", "executed_player": "Alice"}
+            # ],
+            # "dead": True
+        },
+        "Gina": {
+            "role": "Butler",
+            # "night_results": [
+            #     {"night": 1, "num_evil": 1, "neighbor1": "Holly", "neighbor2": "Fiona"}
+            # ],
+            # "dead": True
+        },
+        "Holly": {
+            "role": "Mayor",
+            # "seen_role": "Undertaker",
+            # "seen_players": ["Bob", "Gina"]
+            # "dead": True,
+            # "first_nominator": "Fiona",
+            # "died": False
+        }
     }
     TB_ROLES = {
         "Townsfolk": [
