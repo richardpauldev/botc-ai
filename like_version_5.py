@@ -27,6 +27,8 @@ class WorldState:
     good_role_options: Dict[str, List[str]] = field(default_factory=dict)
     red_herring: Optional[str] = None
 
+do_prints = False
+
 def generate_all_worlds(
     player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count
 ):
@@ -35,7 +37,6 @@ def generate_all_worlds(
     players = list(player_names)
 
     for minion_role_combo in itertools.combinations(all_minion_roles, m_minions):
-        # Only allow Barons for over-outsider worlds:
         minion_role_combo_set = set(minion_role_combo)
         for minion_players in itertools.combinations(players, m_minions):
             for minion_role_perm in itertools.permutations(minion_role_combo):
@@ -43,12 +44,17 @@ def generate_all_worlds(
                 non_minions = [p for p in players if p not in minion_players]
 
                 for imp_player in non_minions:
+                    if imp_player == "Eve" and minion_players[0] == "Holly" and minion_dict["Holly"] == "Baron":
+                        do_prints = True
+                    else:
+                        do_prints = False
                     evil = set(minion_players) | {imp_player}
                     trustworthy = [p for p in players if p not in evil]
                     num_trustworthy_outsiders = sum(
                         1 for p in trustworthy
                         if claims.get(p, {}).get("role") in TB_ROLES["Outsider"]
                     )
+                    
                     if num_trustworthy_outsiders > outsider_count:
                         if "Baron" not in minion_role_combo_set:
                             continue  # Skip worlds without Baron
@@ -68,7 +74,7 @@ def generate_all_worlds(
                                 else:
                                     role = claims.get(p, {}).get("role")
                                     if role:
-                                        roles[p] = role  # Explicit outsider claim
+                                        roles[p] = role
                                     else:
                                         roles[p] = "Good"
                             parsed_claims = {}
@@ -108,6 +114,8 @@ def generate_all_worlds(
                                         roles[p] = role
                                     else:
                                         roles[p] = "Good"
+                            do_prints &= roles["Alice"] == "Drunk"
+                                
                             if len(roles) == n:
                                 parsed_claims = {}
                                 for pl, c in claims.items():
@@ -130,14 +138,13 @@ def generate_all_worlds(
 
 def _claims_of_type(world: WorldState, claim_type: str):
     """Helper to fetch all claims of a given type from the world."""
-    return [c for c in world.claims.values() if c.get("type") == claim_type]
+    return [c for c in world.roles.values() if c == claim_type]
 
 
 def _max_night_from_world(world: WorldState) -> int:
     """Return the maximum referenced night number in a world."""
     max_n = 1
     for c in world.claims.values():
-        print(c)
         n = c.get("night")
         if isinstance(n, int) and n > max_n:
             max_n = n
@@ -434,6 +441,14 @@ def deduction_pipeline(worlds, TB_ROLES):
         for step in ROLE_STEPS:
             next_worlds = []
             for w in current:
+                roless = w.roles
+                if roless["Alice"] == "Drunk" and roless["Eve"] == "Imp" and roless["Holly"] == "Baron":
+                    print(roless)
+                    do_prints = True
+                else:
+                    do_prints = False
+                if do_prints:
+                    print(step.__name__)
                 if step(w, night, TB_ROLES):
                     next_worlds.append(w)
                 else:

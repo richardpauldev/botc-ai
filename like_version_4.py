@@ -1019,9 +1019,9 @@ def deduction_pipeline(worlds, TB_ROLES, setup_counts, deduction_steps):
                     # print_world(-9, valid_world)
                     next_worlds.append(valid_world)
         current_worlds = next_worlds
-        print(f"After {step.__name__}, {len(current_worlds)} worlds remain.")
+        # print(f"After {step.__name__}, {len(current_worlds)} worlds remain.")
         if not current_worlds:
-            print("No worlds remain after deduction step:", step.__name__)
+            # print("No worlds remain after deduction step:", step.__name__)
             break
     return current_worlds
 
@@ -1483,10 +1483,10 @@ if __name__ == "__main__":
 
 
 
-    print("=== Running deduction pipeline ===")
+    # print("=== Running deduction pipeline ===")
     final_worlds = deduction_pipeline(worlds, TB_ROLES, setup_counts, deduction_steps)
 
-    print(f"\nWorlds left after all deduction: {len(final_worlds)}")
+    # print(f"\nWorlds left after all deduction: {len(final_worlds)}")
     # for idx, w in enumerate(final_worlds):
 
         # print_world(idx, w)
@@ -1521,17 +1521,17 @@ if __name__ == "__main__":
 
     final_worlds = expand_all_to_concrete(final_worlds, TB_ROLES, setup_counts, player_names)
     
-    for i in range(len(final_worlds)):
-        print_world(i, final_worlds[i])
+    # for i in range(len(final_worlds)):
+    #     print_world(i, final_worlds[i])
     corr = get_untrustworthy_correlation(final_worlds, player_names)
-    for p1 in player_names:
-        print(f"{p1}: ", end='')
-        print(", ".join(f"{p2}: {corr[p1][p2]:.2f}" for p2 in player_names))
+    # for p1 in player_names:
+    #     print(f"{p1}: ", end='')
+    #     print(", ".join(f"{p2}: {corr[p1][p2]:.2f}" for p2 in player_names))
 
     evil_prob, imp_prob = compute_role_probs(final_worlds, player_names)
 
-    for p in player_names:
-        print(f"{p}: {evil_prob[p]:.1f}% evil, {imp_prob[p]:.1f}% Imp")
+    # for p in player_names:
+    #     print(f"{p}: {evil_prob[p]:.1f}% evil, {imp_prob[p]:.1f}% Imp")
 
 
     '''
