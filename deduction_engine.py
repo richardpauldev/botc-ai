@@ -3,108 +3,51 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from copy import deepcopy
 
-def construct_info_claim_dict(player, claim):
-    """Given a player's name and claim dict, construct a deduction-ready info claim dict."""
+def construct_info_claim_dict(player: str, claim: dict) -> Optional[dict]:
+    """Construct a simplified info-claim dictionary from a raw claim."""
     role = claim.get("role")
-    # print(player)
-    if role == "Washerwoman":
-        return {
-            "type": "washerwoman",
-            "claimer": player,
-            "seen_role": claim.get("seen_role"),
-            "seen_players": claim.get("seen_players"),
-        }
-    elif role == "Librarian":
-        # seen_role can be None (for "saw no outsiders") or the outsider role (for "one of X and Y is [Outsider]")
-        # seen_players should be [] or length 2
-        return {
-            "type": "librarian",
-            "claimer": player,
-            "seen_role": claim.get("seen_role"),
-            "seen_players": claim.get("seen_players", []),
-        }
-    elif role == "Investigator":
-        # seen_role is always the minion role, seen_players is always 2 names
-        return {
-            "type": "investigator",
-            "claimer": player,
-            "seen_role": claim.get("seen_role"),
-            "seen_players": claim.get("seen_players", []),
-        }
-    elif role == "Undertaker":
-        return {
-            "type": "undertaker",
-            "claimer": player,
-            "night_results": [
-                {
-                    "night": entry.get("night"),
-                    "executed_player": entry.get("executed_player"),
-                    "seen_role": entry.get("seen_role"),
-                }
-                for entry in claim.get("night_results", [])
-            ]
-        }
-    elif role == "Ravenkeeper":
-        return {
-                "type": "ravenkeeper",
-                "claimer": player,
-                "seen_player": claim.get("seen_player"),
-                "seen_role": claim.get("seen_role"),
-                "night": claim.get("night"),
-            }
-    elif role == "Slayer": #TODO needs night for poison
-        return {
-            "type": "slayer",
-            "night": claim.get("night"),
-            "claimer": player,
-            "shot_player": claim.get("shot_player"),
-            "died": claim.get("died")
-        }
-    elif role == "Virgin":
-        return {
-            "type": "virgin",
-            "claimer": player,
-            "night": claim.get("night"),
-            "first_nominator": claim.get("first_nominator"),
-            "died": claim.get("died")
-        }
-    elif role == "Empath":
-        return {
-            "type": "empath",
-            "claimer": player,
-            "night_results": [
-                {
-                    "night": entry.get("night"),
-                    "num_evil": entry.get("num_evil"),
-                    "neighbor1": entry.get("neighbor1"),
-                    "neighbor2": entry.get("neighbor2")
-                }
-                for entry in claim.get("night_results", [])
-            ]
-        }
-    elif role == "Fortune Teller":
-        return {
-            "type": "fortune teller",
-            "claimer": player,
-            "night_results": [
-                {
-                    "night": entry.get("night"),
-                    "ping": entry.get("ping"),
-                    "player1": entry.get("player1"),
-                    "player2": entry.get("player2")
-                }
-                for entry in claim.get("night_results", [])
-            ]
-        }
-    elif role == "Chef":
-        return {
-            "type": "chef",
-            "claimer": player,
-            "pairs": claim.get("pairs")
-        }
-    # Add additional info roles here if desired
-    return None
+    if not role:
+        return None
 
+    role_fields = {
+        "Washerwoman": ["seen_role", "seen_players"],
+        "Librarian": ["seen_role", "seen_players"],
+        "Investigator": ["seen_role", "seen_players"],
+        "Undertaker": ["night_results"],
+        "Ravenkeeper": ["seen_player", "seen_role", "night"],
+        "Slayer": ["night", "shot_player", "died"],
+        "Virgin": ["night", "first_nominator", "died"],
+        "Empath": ["night_results"],
+        "Fortune Teller": ["night_results"],
+        "Chef": ["pairs"],
+    }
+
+    fields = role_fields.get(role)
+    if not fields:
+        return None
+
+    info = {"type": role.lower(), "claimer": player}
+
+    nr_subfields = {
+        "undertaker": ["night", "executed_player", "seen_role"],
+        "empath": ["night", "num_evil", "neighbor1", "neighbor2"],
+        "fortune teller": ["night", "ping", "player1", "player2"],
+    }
+
+    for f in fields:
+        value = claim.get(f)
+        if f == "night_results" and isinstance(value, list):
+            subfields = nr_subfields.get(role.lower())
+            if subfields:
+                info[f] = [
+                    {k: entry.get(k) for k in subfields}
+                    for entry in value
+                ]
+            else:
+                info[f] = value
+        else:
+            info[f] = value
+    return info
 
 @dataclass
 class WorldState:
@@ -120,11 +63,14 @@ class WorldState:
 do_prints = False
 
 def generate_all_worlds(
-    player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count
+    player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count, deaths=None,
 ):
     worlds = []
     n = len(player_names)
     players = list(player_names)
+
+    if deaths is None:
+        deaths = []
 
     for minion_role_combo in itertools.combinations(all_minion_roles, m_minions):
         minion_role_combo_set = set(minion_role_combo)
@@ -181,6 +127,7 @@ def generate_all_worlds(
                                         for pl, c in claims.items()
                                         if "roles" in c
                                     },
+                                    deaths=list(deaths)
                                 )
                             )
                     else:
@@ -221,6 +168,7 @@ def generate_all_worlds(
                                             for pl, c in claims.items()
                                             if "roles" in c
                                         },
+                                        deaths=list(deaths)
                                     )
                                 )
     return worlds
@@ -413,7 +361,7 @@ def process_investigator(world: WorldState, night: int, TB_ROLES) -> bool:
     for info in _trustworthy_claims(world, "investigator"):
         players = info.get("seen_players", [])
         role = info.get("seen_role")
-        if not any(world.roles.get(p) == role for p in players):
+        if not any(world.roles.get(p) == role or world.roles.get(p) == "Recluse" for p in players):
             return False
     return True
 
@@ -646,17 +594,16 @@ if __name__ == "__main__":
     m_minions = 1
     claims = {
         "Alice": {
-            "role": "Fortune Teller",
+            "role": "Empath",
             "night_results": [
-                {"night": 1, "ping": True, "player1": "Alice", "player2": "Eve"},
-                {"night": 2, "ping": True, "player1": "Bob", "player2": "Fiona"},
-                {"night": 3, "ping": True, "player1": "Alice", "player2": "Carol"},
-
+                {"night": 1, "num_evil": 0, "player1": "Bob", "player2": "Holly"},
             ],
             # "dead": True
         },
         "Bob": {
-            "role": "Recluse",
+            "role": "Washerwoman",
+            "seen_role": "Librarian",
+            "seen_players": ["Carol", "Holly"]
             # "night_results": [
             #     {"night": 1, "ping": True, "player1": "Bob", "player2": "Fiona"},
             #     {"night": 2, "ping": False, "player1": "Bob", "player2": "Eve"}
@@ -664,7 +611,9 @@ if __name__ == "__main__":
             # "dead": True
         },
         "Carol": {
-            "role": "Slayer",
+            "role": "Librarian",
+            "seen_role": "Recluse",
+            "seen_players": ["Dave", "Holly"]
             # "dead": True
             # "shot_player": "Fiona",
             # "died": False,
@@ -677,10 +626,9 @@ if __name__ == "__main__":
             # "dead": True
         },
         "Dave": {
-            "role": "Ravenkeeper",
-            "seen_player": "Carol",
-            "seen_role": "Slayer",
-            "night": 3,
+            "role": "Investigator",
+            "seen_role": "Scarlet Woman",
+            "seen_players": ["Carol", "Frank"]
             # "dead": True
             # "night_results": [
             #     {"night": 1, "num_evil": 1, "neighbor1": "Carol", "neighbor2": "Eve"}
@@ -688,16 +636,18 @@ if __name__ == "__main__":
             # "dead": True
         },
         "Eve": {
-            "role": "Washerwoman",
-            "seen_role": "Virgin",
-            "seen_players": ["Dave", "Fiona"],
+            "role": "Soldier",
+            # "seen_role": "Virgin",
+            # "seen_players": ["Dave", "Fiona"],
             # "dead": True
             # "night": 2,
             # "seen_role": "Empath",
             # "seen_player": "Gina"
         },
         "Frank": {
-            "role": "Virgin",
+            "role": "Chef",
+            "evil_pairs": 1,
+            "night": 1
             # "night_results": [
             #     {"night": 2, "seen_role": "Imp", "executed_player": "Dave"},
             #     {"night": 3, "seen_role": "Fortune Teller", "executed_player": "Alice"}
@@ -705,14 +655,14 @@ if __name__ == "__main__":
             # "dead": True
         },
         "Gina": {
-            "role": "Butler",
+            "role": "Mayor",
             # "night_results": [
             #     {"night": 1, "num_evil": 1, "neighbor1": "Holly", "neighbor2": "Fiona"}
             # ],
             # "dead": True
         },
         "Holly": {
-            "role": "Mayor",
+            "role": "Recluse",
             # "seen_role": "Undertaker",
             # "seen_players": ["Bob", "Gina"]
             # "dead": True,
@@ -742,8 +692,14 @@ if __name__ == "__main__":
     }
     outsider_count = 1
 
+    # Add deaths here 
+    # {"player": "X", "night": -1, "time": "day" OR "night"}
+    deaths = [{"player": "Holly", "night": 1, "time": "day"},
+              {"player": "Alice", "night": 2, "time": "night"},
+              {"player": "Frank", "night": 3, "time": "night"}]
+
     worlds = generate_all_worlds(
-        player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count
+        player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count, deaths=deaths
     )
     print(f"Generated {len(worlds)} worlds before deduction.")
     deduced = deduction_pipeline(worlds, TB_ROLES)
