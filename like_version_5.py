@@ -136,9 +136,20 @@ def generate_all_worlds(
     return worlds
 
 
-def _claims_of_type(world: WorldState, claim_type: str):
-    """Helper to fetch all claims of a given type from the world."""
-    return [c for c in world.claims.values() if c.get("type") == claim_type]
+def _claims_of_type(world: WorldState, claim_type: str) -> List[str]:
+    """Return all players who claim the given role type."""
+    return [p for p, info in world.claims.items() if info.get("type") == claim_type]
+
+
+def _trustworthy_claims(world: WorldState, claim_type: str) -> List[dict]:
+    """Return claim info for the trustworthy player(s) with the given role."""
+    result = []
+    for player, role in world.roles.items():
+        if role == claim_type:
+            info = world.claims.get(player)
+            if info and info.get("type") == claim_type:
+                result.append(info)
+    return result
 
 
 def _max_night_from_world(world: WorldState) -> int:
@@ -193,7 +204,7 @@ def _branch_red_herring(world: WorldState, night: int, TB_ROLES) -> List[WorldSt
     if world.red_herring is not None:
         return []
     candidates = set()
-    for info in _claims_of_type(world, "fortune teller"):
+    for info in _trustworthy_claims(world, "fortune teller"):
         for entry in info.get("night_results", []):
             if entry.get("night") != night:
                 continue
@@ -276,7 +287,7 @@ def _apply_imp_death(world: WorldState, night: int, TB_ROLES) -> List[WorldState
 def process_washerwoman(world: WorldState, night: int, TB_ROLES) -> bool:
     if night != 1:
         return True
-    for info in _claims_of_type(world, "washerwoman"):
+    for info in _trustworthy_claims(world, "washerwoman"):
         players = info.get("seen_players") or []
         role = info.get("seen_role")
         if players and role:
@@ -289,7 +300,7 @@ def process_washerwoman(world: WorldState, night: int, TB_ROLES) -> bool:
 def process_librarian(world: WorldState, night: int, TB_ROLES) -> bool:
     if night != 1:
         return True
-    for info in _claims_of_type(world, "librarian"):
+    for info in _trustworthy_claims(world, "librarian"):
         players = info.get("seen_players", [])
         role = info.get("seen_role")
         if role is None:
@@ -304,7 +315,7 @@ def process_librarian(world: WorldState, night: int, TB_ROLES) -> bool:
 def process_investigator(world: WorldState, night: int, TB_ROLES) -> bool:
     if night != 1:
         return True
-    for info in _claims_of_type(world, "investigator"):
+    for info in _trustworthy_claims(world, "investigator"):
         players = info.get("seen_players", [])
         role = info.get("seen_role")
         if not any(world.roles.get(p) == role for p in players):
@@ -313,7 +324,7 @@ def process_investigator(world: WorldState, night: int, TB_ROLES) -> bool:
 
 
 def process_undertaker(world: WorldState, night: int, TB_ROLES) -> bool:
-    for info in _claims_of_type(world, "undertaker"):
+    for info in _trustworthy_claims(world, "undertaker"):
         for entry in info.get("night_results", []):
             if entry.get("night") == night:
                 executed = entry.get("executed_player")
@@ -324,7 +335,7 @@ def process_undertaker(world: WorldState, night: int, TB_ROLES) -> bool:
 
 
 def process_ravenkeeper(world: WorldState, night: int, TB_ROLES) -> bool:
-    for info in _claims_of_type(world, "ravenkeeper"):
+    for info in _trustworthy_claims(world, "ravenkeeper"):
         if info.get("night") == night:
             if world.roles.get(info.get("seen_player")) != info.get("seen_role"):
                 return False
@@ -332,7 +343,7 @@ def process_ravenkeeper(world: WorldState, night: int, TB_ROLES) -> bool:
 
 
 def process_slayer(world: WorldState, night: int, TB_ROLES) -> bool:
-    for info in _claims_of_type(world, "slayer"):
+    for info in _trustworthy_claims(world, "slayer"):
         if info.get("night") == night:
             shot = info.get("shot_player")
             died = info.get("died")
@@ -352,7 +363,7 @@ def process_slayer(world: WorldState, night: int, TB_ROLES) -> bool:
 
 def process_virgin(world: WorldState, night: int, TB_ROLES) -> bool:
     townsfolk = set(TB_ROLES.get("Townsfolk", []))
-    for info in _claims_of_type(world, "virgin"):
+    for info in _trustworthy_claims(world, "virgin"):
         if info.get("night") == night:
             nom = info.get("first_nominator")
             died = info.get("died")
@@ -373,7 +384,7 @@ def process_virgin(world: WorldState, night: int, TB_ROLES) -> bool:
 
 def process_empath(world: WorldState, night: int, TB_ROLES) -> bool:
     evil = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
-    for info in _claims_of_type(world, "empath"):
+    for info in _trustworthy_claims(world, "empath"):
         for entry in info.get("night_results", []):
             if entry.get("night") == night:
                 neighbors = [entry.get("neighbor1"), entry.get("neighbor2")]
@@ -384,7 +395,7 @@ def process_empath(world: WorldState, night: int, TB_ROLES) -> bool:
 
 
 def process_fortune_teller(world: WorldState, night: int, TB_ROLES) -> bool:
-    for info in _claims_of_type(world, "fortune teller"):
+    for info in _trustworthy_claims(world, "fortune teller"):
         for entry in info.get("night_results", []):
             if entry.get("night") == night:
                 players = [entry.get("player1"), entry.get("player2")]
@@ -399,7 +410,7 @@ def process_fortune_teller(world: WorldState, night: int, TB_ROLES) -> bool:
 def process_chef(world: WorldState, night: int, TB_ROLES) -> bool:
     if night != 1:
         return True
-    for info in _claims_of_type(world, "chef"):
+    for info in _trustworthy_claims(world, "chef"):
         pairs = info.get("pairs")
         if pairs is None:
             continue
