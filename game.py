@@ -2,14 +2,29 @@ from __future__ import annotations
 from enum import Enum, auto
 import random
 from dataclasses import dataclass, field
+import builtins
 
 # Toggle detailed debug logging
 DEBUG = False
 
+__builtin_print = builtins.print
+
 
 def debug(msg: str) -> None:
     if DEBUG:
-        print(f"DEBUG: {msg}")
+        __builtin_print(f"DEBUG: {msg}")
+
+def _filtered_print(*args, **kwargs):
+    if (
+        not DEBUG
+        and args
+        and isinstance(args[0], str)
+        and args[0].startswith("DEBUG")
+    ):
+        return
+    __builtin_print(*args, **kwargs)
+
+print = _filtered_print
 
 
 class Phase(Enum):
@@ -418,11 +433,13 @@ class Game:
         """
         night phase for alive roles w/ abilities
         """
+
+        self.state.night += 1
         print(f"\n==== NIGHT {self.state.night} ====")  # start of night_phase
         for p in self.players:
             print(p.seat, p.name, self.get_player_view(p))
 
-        self.state.night += 1
+        
         self.state.monk_protected = None
         for player in self.get_alive_players():
             player.role.night_action(player, self)
@@ -590,7 +607,7 @@ class Game:
             elif self.state.phase == Phase.DAY:
                 self.day_phase()
             result = self.check_win_conditions()
-            if result or self.state.phase == Phase.GAME_OVER:
+            if result or self.state.phase == Phase.GAME_OVER or self.state.night > 10:
                 print(result)
                 break
 
@@ -619,7 +636,7 @@ class Game:
                     return
 
     def get_player_view(self, player):
-        if self.state.night == 0 and self.state.phase == Phase.NIGHT:
+        if self.state.night == 1 and self.state.phase == Phase.NIGHT:
             claims = {}
         else:
             claims = {p.seat: p.claim for p in self.players if p.claim is not None}
