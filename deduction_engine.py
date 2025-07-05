@@ -583,8 +583,12 @@ def compute_role_probs(worlds, all_players, TB_ROLES):
     return evil_probs, imp_probs
 
 
-def deduce_game(game):
-    """Run deduction on a ``Game`` instance from ``game.py``."""
+def deduce_game(game, pov_player=None):
+    """Run deduction on a ``Game`` instance from ``game.py``.
+
+    ``pov_player`` specifies the name of the player making the deduction. Any
+    worlds where that player is evil are discarded.
+    """
     TB_ROLES = {a.value if hasattr(a, "value") else a: roles for a, roles in game.TROUBLE_BREWING_ROLES.items()}
     player_names = [p.name for p in game.players]
     all_minion_roles = TB_ROLES["Minion"]
@@ -605,6 +609,7 @@ def deduce_game(game):
         TB_ROLES,
         outsider_count,
         deaths=[],
+        pov_player=pov_player,
     )
     deduced = deduction_pipeline(worlds, TB_ROLES)
     evil_prob, imp_prob = compute_role_probs(deduced, player_names, TB_ROLES)
