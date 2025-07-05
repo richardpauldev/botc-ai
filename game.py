@@ -58,6 +58,12 @@ class PlayerView:
     history: list
     votes: dict
 
+    def __repr__(self) -> str:
+        return (
+            f"PlayerView(seat={self.player_seat}, name={self.player_name}), "
+            f"role={self.role_name}, phase={self.phase.name}, day={self.day}, "
+            f"alive={self.is_alive})" 
+        )
 
 class Role:
     """
@@ -437,7 +443,7 @@ class Game:
         self.state.night += 1
         print(f"\n==== NIGHT {self.state.night} ====")  # start of night_phase
         for p in self.players:
-            print(p.seat, p.name, self.get_player_view(p))
+            print(self.get_player_view(p))
 
         
         self.state.monk_protected = None
@@ -460,12 +466,13 @@ class Game:
         self.state.pending_deaths.clear()
 
         print(f"\n==== DAY {self.state.day} ====")  # start of day_phase
-        print("Players Info:")
-        for p in self.players:
-            print(p.seat, p.name, self.get_player_view(p))
-        alive_players = self.get_alive_players()
 
         self.info_swapping_opportunity(context="wakeup")
+
+        print("Players Info:")
+        for p in self.players:
+            print(self.get_player_view(p))
+        alive_players = self.get_alive_players()
 
         self.state.nominees = []
         self.state.votes = {}

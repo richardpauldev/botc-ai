@@ -244,6 +244,19 @@ class GoodPlayerController(PlayerController):
         return best_target if best_target else (random.choice(others) if others else None)
 
     def share_info(self, player_view: PlayerView, context=None):
-        info = self.player.memory
+        # info = self.player.memory
+        if self.player.claim is None:
+            claim = {"role": player_view.role_name}
+            if "night_results" in player_view.memory:
+                claim["night_results"] = player_view.memory["night_results"]
+            if "info" in player_view.memory:
+                claim.update(player_view.memory["info"])
+            self.player.claim = claim
+            return {"from": self.player.name, "public_claim": self.player.claim}
+        info = {
+            k: v
+            for k, v in self.player.memory.items()
+            if k != "received_info"
+        }
         return {"from": self.player.name, "public": info}
 

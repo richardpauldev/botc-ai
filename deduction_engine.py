@@ -63,6 +63,8 @@ class WorldState:
     good_role_options: Dict[str, List[str]] = field(default_factory=dict)
     red_herring: Optional[str] = None
 
+ONGOING_INFO_ROLES = {"Empath", "Fortune Teller", "Undertaker", "Ravenkeeper", "Virgin", "Slayer"}
+
 def generate_all_worlds(
     player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count, deaths=None, pov_player=None
 ):
@@ -263,6 +265,50 @@ def _branch_red_herring(world: WorldState, night: int, TB_ROLES) -> List[WorldSt
 def _alive_players(world: WorldState, night: int) -> List[str]:
     """Return list of players alive at the start of the given night."""
     return [p for p in world.roles if _is_alive(world, p, night)]
+
+def _world_weight(world: WorldState, TB_ROLES) -> float:
+    evil_roles = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
+
+    good_players = [p for p, r in world.roles.items() if r not in evil_roles]
+    num_good = len(good_players)
+    if num_good == 0:
+        return 1.0
+    
+    weight = 1.0
+
+    # Drunk probability ---------------------------------------------------
+    if any(r == "Drunk" for r in world.roles.values()):
+        non_drunk_outsiders = sum(
+            1
+            for r in world.roles.values()
+            if r in TB_ROLES.get("Outsider", []) and r != "Drunk"
+        )
+        denom = num_good - non_drunk_outsiders
+        if denom <= 0:
+            denom = num_good
+        weight *= 1.0 / denom
+
+    # Poison probability --------------------------------------------------
+    for pn in world.poison_nights:
+        if pn == 1:
+            weight *= 1.0 / num_good
+        else:
+            alive_ongoing = [
+                p
+                for p in good_players
+                if world.roles[p] in ONGOING_INFO_ROLES and _is_alive(world, p, pn)
+            ]
+            denom = len(alive_ongoing)
+            if denom <= 0:
+                denom = num_good
+            weight *= 1.0 / denom
+
+    # Fortune Teller red herring ----------------------------------------
+    if world.red_herring is not None:
+        weight *= 1.0 / num_good
+
+    return weight
+
 
 
 def _demon_alive(world: WorldState, night: int) -> bool:
@@ -561,23 +607,27 @@ def get_untrustworthy_correlation(worlds, all_players, TB_ROLES):
 
 
 def compute_role_probs(worlds, all_players, TB_ROLES):
-    # TODO Add in weighting
     """Return probability each player is evil or specifically the Imp."""
     evil_roles = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
     evil_probs = {p: 0.0 for p in all_players}
     imp_probs = {p: 0.0 for p in all_players}
-    total = float(len(worlds))
+
+    weights = []
+    for w in worlds:
+        weights.append(_world_weight(w, TB_ROLES))
+    
+    total = sum(weights)
 
     if total == 0:
         return evil_probs, imp_probs
 
-    for w in worlds:
+    for w, weight in zip(worlds, weights):
         for p in all_players:
             role = w.roles.get(p)
             if role in evil_roles:
-                evil_probs[p] += 1
+                evil_probs[p] += weight
             if role == "Imp":
-                imp_probs[p] += 1
+                imp_probs[p] += weight
 
     for p in all_players:
         evil_probs[p] = evil_probs[p] / total * 100
