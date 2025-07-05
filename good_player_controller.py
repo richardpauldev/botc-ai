@@ -21,36 +21,81 @@ class GoodPlayerController(PlayerController):
         return [p for p in game.players if p.alive]
 
     # Voting and nominations -----------------------------------------------
-    def choose_nominee(self, candidates: List[Player], player_view: PlayerView, game=None):
+    def choose_nominee(
+        self, candidates: List[Player], player_view: PlayerView, game=None
+    ):
+        """Pick someone to nominate based on evil probability.
+
+        A player will sometimes decline to nominate, but must do so when only
+        three players remain. Nomination choices are weighted toward players
+        believed to be evil rather than always picking the single top suspect.
+        """
         if game is None:
             return None
 
         alive = self._alive_players(game)
-        if len(alive) <= 4:
+        evil_prob, _ = self._evil_imp_probs(game)
+
+        others = [p for p in alive if p != self.player]
+        if not others:
             return None
 
-        evil_prob, _ = self._evil_imp_probs(game)
-        best = max((p for p in alive if p != self.player), key=lambda p: evil_prob[p.name])
-        # Some randomness so behavior is not deterministic
-        if random.random() < 0.2:
+        final_three = len(alive) == 3
+
+        # Chance to skip nomination unless we're in the final three
+        if not final_three and random.random() < 0.3:
             return None
-        return best
+
+        weights = [max(evil_prob[p.name], 1) for p in others]
+        return random.choices(others, weights=weights, k=1)[0]
 
     def cast_vote(self, nominee: Player, player_view: PlayerView, game=None) -> bool:
+        """Decide whether to vote for a nominee.
+
+        Dead players only vote in the final three. Players compare the nominee
+        to the current leading candidate and usually vote only if they believe
+        the nominee is more likely evil.
+        """
         if game is None:
             return False
 
         alive = self._alive_players(game)
         evil_prob, imp_prob = self._evil_imp_probs(game)
+        final_three = len(alive) <= 3
 
-        if len(alive) <= 3:
-            target = max(alive, key=lambda p: imp_prob[p.name])
-            return nominee == target
-        if len(alive) == 4:
+        # Dead players can only vote in the final three
+        if not self.player.alive and not final_three:
             return False
 
-        target = max((p for p in alive if p != self.player), key=lambda p: evil_prob[p.name])
-        return nominee == target and random.random() < 0.9
+        # Determine who is currently leading the vote
+        leader = None
+        leader_votes = -1
+        for n_name, voters in player_view.votes.items():
+            if len(voters) > leader_votes:
+                leader_votes = len(voters)
+                leader = n_name
+
+        leader_score = evil_prob.get(leader, 0)
+        nominee_score = evil_prob[nominee.name]
+
+        if final_three:
+            # During the final three, players are more decisive. They will vote
+            # for the nominee only if they appear more evil than whoever is
+            # currently leading the vote count.
+            if leader and leader != nominee.name and leader_score >= nominee_score:
+                return False
+            chance = nominee_score / 100.0
+            return random.random() < max(chance, 0.3)
+
+        # Outside final three -------------------------------------------------
+        if leader and leader != nominee.name and leader_score >= nominee_score:
+            # Current leader is at least as suspicious; don't change the vote
+            return False
+
+        # Weight vote probability by how suspicious the nominee is
+        chance = nominee_score / 100.0
+        # Small baseline so highly suspected players are voted more often
+        return random.random() < chance
 
     # Night actions --------------------------------------------------------
     def choose_fortune_teller_targets(self, candidates, player_view, game=None):
