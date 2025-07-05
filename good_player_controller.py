@@ -7,9 +7,9 @@ import itertools
 from typing import List, Tuple
 
 from deduction_engine import (
-    deduce_game,
     generate_all_worlds,
     deduction_pipeline,
+    compute_role_probs,
 )
 from game import (
     PlayerController,
@@ -23,33 +23,64 @@ from game import (
 class GoodPlayerController(PlayerController):
     """A simple AI for good players using deduction heuristics."""
 
-    def _evil_imp_probs(self, game) -> Tuple[dict, dict]:
-        """Run deduction from this player's perspective."""
-        return deduce_game(game, pov_player=self.player.name)
+    def _evil_imp_probs(self, player_view: PlayerView) -> Tuple[dict, dict]:
+        """Run deduction using only the provided ``PlayerView``."""
+        TB_ROLES = {
+            a.value if hasattr(a, "value") else a: roles
+            for a, roles in TROUBLE_BREWING_ROLES.items()
+        }
+        player_names = [name for name in player_view.seat_names.values()]
+        m_minions, outsider_count = player_role_counts(len(player_names))
+
+        claims = {}
+        for seat, name in player_view.seat_names.items():
+            c = dict(player_view.public_claims.get(seat, {}) or {})
+            if seat == player_view.player_seat:
+                c["role"] = player_view.role_name
+                if "night_results" in player_view.memory:
+                    c["night_results"] = player_view.memory["night_results"]
+                if "info" in player_view.memory:
+                    c.update(player_view.memory["info"])
+            claims[name] = c
+
+        worlds = generate_all_worlds(
+            player_names,
+            TB_ROLES["Minion"],
+            m_minions,
+            claims,
+            TB_ROLES,
+            outsider_count,
+            deaths=[],
+            pov_player=self.player.name,
+        )
+        deduced = deduction_pipeline(worlds, TB_ROLES)
+        evil_prob, imp_prob = compute_role_probs(deduced, player_names, TB_ROLES)
+        return evil_prob, imp_prob
 
     # Utility ---------------------------------------------------------------
-    def _alive_players(self, game: "Game") -> List[Player]:
-        return [p for p in game.players if p.alive]
+    def _alive_players(self, candidates: List[Player], player_view: PlayerView) -> List[Player]:
+        alive_seats = set(player_view.alive_players)
+        return [p for p in candidates if p.seat in alive_seats]
 
-    def _possible_worlds(self, game):
+    def _possible_worlds(self, player_view: PlayerView):
         """Return all worlds consistent with this player's knowledge."""
         TB_ROLES = {
             a.value if hasattr(a, "value") else a: roles
             for a, roles in TROUBLE_BREWING_ROLES.items()
         }
-        player_names = [p.name for p in game.players]
-        m_minions, outsider_count = player_role_counts(len(game.players))
+        player_names = [name for name in player_view.seat_names.values()]
+        m_minions, outsider_count = player_role_counts(len(player_names))
 
         claims = {}
-        for p in game.players:
-            c = dict(p.claim) if getattr(p, "claim", None) else {}
-            if p is self.player:
-                c["role"] = p.role.name
-                if "night_results" in p.memory:
-                    c["night_results"] = p.memory["night_results"]
-                if "info" in p.memory:
-                    c.update(p.memory["info"])
-            claims[p.name] = c
+        for seat, name in player_view.seat_names.items():
+            c = dict(player_view.public_claims.get(seat, {}) or {})
+            if seat == player_view.player_seat:
+                c["role"] = player_view.role_name
+                if "night_results" in player_view.memory:
+                    c["night_results"] = player_view.memory["night_results"]
+                if "info" in player_view.memory:
+                    c.update(player_view.memory["info"])
+            claims[name] = c
 
         worlds = generate_all_worlds(
             player_names,
@@ -74,7 +105,7 @@ class GoodPlayerController(PlayerController):
 
     # Voting and nominations -----------------------------------------------
     def choose_nominee(
-        self, candidates: List[Player], player_view: PlayerView, game=None
+        self, candidates: List[Player], player_view: PlayerView
     ):
         """Pick someone to nominate based on evil probability.
 
@@ -82,11 +113,8 @@ class GoodPlayerController(PlayerController):
         three players remain. Nomination choices are weighted toward players
         believed to be evil rather than always picking the single top suspect.
         """
-        if game is None:
-            return None
-
-        alive = self._alive_players(game)
-        evil_prob, _ = self._evil_imp_probs(game)
+        alive = self._alive_players(candidates, player_view)
+        evil_prob, _ = self._evil_imp_probs(player_view)
 
         others = [p for p in alive if p != self.player]
         if not others:
@@ -101,19 +129,15 @@ class GoodPlayerController(PlayerController):
         weights = [max(evil_prob[p.name], 1) for p in others]
         return random.choices(others, weights=weights, k=1)[0]
 
-    def cast_vote(self, nominee: Player, player_view: PlayerView, game=None) -> bool:
+    def cast_vote(self, nominee: Player, player_view: PlayerView) -> bool:
         """Decide whether to vote for a nominee.
 
         Dead players only vote in the final three. Players compare the nominee
         to the current leading candidate and usually vote only if they believe
         the nominee is more likely evil.
         """
-        if game is None:
-            return False
-
-        alive = self._alive_players(game)
-        evil_prob, imp_prob = self._evil_imp_probs(game)
-        final_three = len(alive) <= 3
+        evil_prob, imp_prob = self._evil_imp_probs(player_view)
+        final_three = len(player_view.alive_players) <= 3
 
         # Dead players can only vote in the final three
         if not self.player.alive and not final_three:
@@ -150,11 +174,9 @@ class GoodPlayerController(PlayerController):
         return random.random() < chance
 
     # Night actions --------------------------------------------------------
-    def choose_fortune_teller_targets(self, candidates, player_view, game=None):
-        if game is None:
-            return random.sample(candidates, 2)
+    def choose_fortune_teller_targets(self, candidates, player_view):
 
-        worlds = self._possible_worlds(game)
+        worlds = self._possible_worlds(player_view)
         others = [p for p in candidates if p != self.player]
         if len(others) < 2:
             return tuple(random.sample(candidates, 2))
@@ -171,11 +193,9 @@ class GoodPlayerController(PlayerController):
 
         return best_pair if best_pair else tuple(random.sample(others, 2))
 
-    def choose_monk_protect(self, candidates, player_view, game=None):
-        if game is None:
-            return random.choice(candidates) if candidates else None
+    def choose_monk_protect(self, candidates, player_view):
 
-        evil_prob, _ = self._evil_imp_probs(game)
+        evil_prob, _ = self._evil_imp_probs(player_view)
         info_roles = {
             "Empath",
             "Fortune Teller",
@@ -198,11 +218,9 @@ class GoodPlayerController(PlayerController):
                 best_score = score
         return best
 
-    def choose_ravenkeeper_reveal(self, candidates, player_view, game=None):
-        if game is None:
-            return random.choice(candidates) if candidates else None
+    def choose_ravenkeeper_reveal(self, candidates, player_view):
 
-        worlds = self._possible_worlds(game)
+        worlds = self._possible_worlds(player_view)
         others = [p for p in candidates if p != self.player]
         best_target = None
         best_score = float("inf")
@@ -218,8 +236,7 @@ class GoodPlayerController(PlayerController):
 
         return best_target if best_target else (random.choice(others) if others else None)
 
-    def share_info(self, game, self_player, context=None):
-        info = self_player.memory
-        for target in game.players:
-            self.send_info(target, {"from": self_player.name, "public": info})
+    def share_info(self, player_view: PlayerView, context=None):
+        info = self.player.memory
+        return {"from": self.player.name, "public": info}
 
