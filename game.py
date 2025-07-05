@@ -503,13 +503,16 @@ class Game:
         night phase for alive roles w/ abilities
         """
         print(f"\n==== NIGHT {self.state.night} ====")  # start of night_phase
-        for p in game.players:
-            print(p.seat, p.name, game.get_player_view(p))
+        for p in self.players:
+            print(p.seat, p.name, self.get_player_view(p))
 
         self.state.night += 1
         self.state.monk_protected = None
         for player in self.get_alive_players():
             player.role.night_action(player, self)
+            print(
+                f"{player.name} ({player.role.name}) night summary: {player.memory}"
+            )
         self.state.advance_phase()
 
     def day_phase(self):
@@ -525,12 +528,12 @@ class Game:
 
         print(f"\n==== DAY {self.state.day} ====")  # start of day_phase
         print("Players Info:")
-        for p in game.players:
-            print(p.seat, p.name, game.get_player_view(p))
+        for p in self.players:
+            print(p.seat, p.name, self.get_player_view(p))
         alive_players = self.get_alive_players()
 
         self.state.nominees = []
-        self.state.votes = []
+        self.state.votes = {}
         nominations = 0
         executed_today = None
 
@@ -567,7 +570,7 @@ class Game:
                 ]:
                     pv = self.get_player_view(p)
                     if p.controller.cast_vote(nominee, pv):
-                        votes.append()
+                        votes.append(p)
                         vote_names.append(p.name)
                         if not p.alive:
                             p.has_used_dead_vote = True
@@ -736,20 +739,27 @@ class Game:
 
         claims = {p.name: p.claim for p in self.players if p.claim}
 
-        worlds = generate_all_worlds(
-            player_names,
-            all_minion_roles,
-            m_minions,
-            claims,
-            TB_ROLES,
-            outsider_count,
-            deaths=[],
-        )
-        deduced = deduction_pipeline(worlds, TB_ROLES)
-        evil_prob, imp_prob = compute_role_probs(deduced, player_names, TB_ROLES)
-        print("\nDeduction results:")
-        for name in player_names:
-            print(f"{name}: {evil_prob[name]:.1f}% evil, {imp_prob[name]:.1f}% Imp")
+        try:
+            worlds = generate_all_worlds(
+                player_names,
+                all_minion_roles,
+                m_minions,
+                claims,
+                TB_ROLES,
+                outsider_count,
+                deaths=[],
+            )
+            deduced = deduction_pipeline(worlds, TB_ROLES)
+            evil_prob, imp_prob = compute_role_probs(
+                deduced, player_names, TB_ROLES
+            )
+            print("\nDeduction results:")
+            for name in player_names:
+                print(
+                    f"{name}: {evil_prob[name]:.1f}% evil, {imp_prob[name]:.1f}% Imp"
+                )
+        except Exception as e:  # pragma: no cover - fallback for early bugs
+            print(f"Deduction failed: {e}")
 
 
 # TODO Insert Role implementations
@@ -1553,18 +1563,35 @@ class Imp(Role):
 
 
 if __name__ == "__main__":
+    import sys
+
+    # Alias this module as 'game' so the controller modules can import it
+    sys.modules.setdefault("game", sys.modules[__name__])
+
+    from good_player_controller import GoodPlayerController
+    from evil_player_controller import EvilPlayerController
+
     roles = [
         Washerwoman(DumbStorytellerAI()),
         Librarian(DumbStorytellerAI()),
         Investigator(DumbStorytellerAI()),
-        Chef(
-            DumbStorytellerAI(),
-        ),
+        Chef(DumbStorytellerAI()),
         Undertaker(DumbStorytellerAI()),
         Saint(DumbStorytellerAI()),
         ScarletWoman(DumbStorytellerAI()),
         Imp(DumbStorytellerAI()),
-    ]  # Insert roles
+    ]
+
     player_names = [f"Player {i+1}" for i in range(len(roles))]
     game = Game(player_names, roles)
+
+    # Replace default Human controllers with AI controllers based on alignment
+    for p in game.players:
+        if p.role.alignment in (Alignment.MINION, Alignment.DEMON):
+            p.controller = EvilPlayerController()
+        else:
+            p.controller = GoodPlayerController()
+        p.controller.set_player(p)
+
+    print("Starting automated game with AI players...\n")
     game.run()
