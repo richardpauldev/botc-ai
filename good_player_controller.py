@@ -43,18 +43,25 @@ class GoodPlayerController(PlayerController):
                     c.update(player_view.memory["info"])
             claims[name] = c
 
-        worlds = generate_all_worlds(
-            player_names,
-            TB_ROLES["Minion"],
-            m_minions,
-            claims,
-            TB_ROLES,
-            outsider_count,
-            deaths=[],
-            pov_player=self.player.name,
-        )
-        deduced = deduction_pipeline(worlds, TB_ROLES)
-        evil_prob, imp_prob = compute_role_probs(deduced, player_names, TB_ROLES)
+        try:
+            worlds = generate_all_worlds(
+                player_names,
+                TB_ROLES["Minion"],
+                m_minions,
+                claims,
+                TB_ROLES,
+                outsider_count,
+                deaths=[],
+                pov_player=self.player.name,
+            )
+            deduced = deduction_pipeline(worlds, TB_ROLES)
+            evil_prob, imp_prob = compute_role_probs(
+                deduced, player_names, TB_ROLES
+            )
+        except Exception as e:  # pragma: no cover - fallback for early bugs
+            print(f"Deduction error: {e}")
+            evil_prob = {name: 0.0 for name in player_names}
+            imp_prob = {name: 0.0 for name in player_names}
         return evil_prob, imp_prob
 
     # Utility ---------------------------------------------------------------

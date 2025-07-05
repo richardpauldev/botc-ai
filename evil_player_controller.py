@@ -10,6 +10,7 @@ from game import (
     PlayerView,
     Alignment,
     TROUBLE_BREWING_ROLES,
+    player_role_counts,
 )
 
 
@@ -42,17 +43,24 @@ class EvilPlayerController(PlayerController):
                     c.update(player_view.memory["info"])
             claims[name] = c
 
-        worlds = generate_all_worlds(
-            player_names,
-            TB_ROLES["Minion"],
-            m_minions,
-            claims,
-            TB_ROLES,
-            outsider_count,
-            deaths=[],
-        )
-        deduced = deduction_pipeline(worlds, TB_ROLES)
-        evil_prob, imp_prob = compute_role_probs(deduced, player_names, TB_ROLES)
+        try:
+            worlds = generate_all_worlds(
+                player_names,
+                TB_ROLES["Minion"],
+                m_minions,
+                claims,
+                TB_ROLES,
+                outsider_count,
+                deaths=[],
+            )
+            deduced = deduction_pipeline(worlds, TB_ROLES)
+            evil_prob, imp_prob = compute_role_probs(
+                deduced, player_names, TB_ROLES
+            )
+        except Exception as e:  # pragma: no cover - fallback for early bugs
+            print(f"Deduction error: {e}")
+            evil_prob = {name: 0.0 for name in player_names}
+            imp_prob = {name: 0.0 for name in player_names}
         return evil_prob, imp_prob
 
     def _alive_players(self, candidates: List[Player], player_view: PlayerView) -> List[Player]:
