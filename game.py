@@ -36,6 +36,7 @@ class PlayerView:
     role_claim: dict | None
     is_alive: bool
     public_claims: dict
+    seat_names: dict
     alive_players: list
     dead_players: list
     memory: dict
@@ -143,33 +144,33 @@ class PlayerController:
     def send_info(self, player, info):
         player.receive_info(self.player, info)
 
-    def choose_fortune_teller_targets(self, candidates, player_view, game=None):
+    def choose_fortune_teller_targets(self, candidates, player_view):
         raise NotImplementedError
 
-    def choose_monk_protect(self, candidates, player_view, game=None):
+    def choose_monk_protect(self, candidates, player_view):
         raise NotImplementedError
 
-    def choose_ravenkeeper_reveal(self, candidates, player_view, game=None):
+    def choose_ravenkeeper_reveal(self, candidates, player_view):
         raise NotImplementedError
 
-    def choose_imp_kill(self, candidates, player_view, game=None):
+    def choose_imp_kill(self, candidates, player_view):
         raise NotImplementedError
 
-    def choose_poisoner_target(self, candidates, player_view, game=None):
+    def choose_poisoner_target(self, candidates, player_view):
         raise NotImplementedError
 
-    def choose_nominee(self, candidates: list, player_view: PlayerView, game=None):
+    def choose_nominee(self, candidates: list, player_view: PlayerView):
         raise NotImplementedError
 
-    def cast_vote(self, nominee: "Player", player_view: PlayerView, game=None) -> bool:
+    def cast_vote(self, nominee: "Player", player_view: PlayerView) -> bool:
         raise NotImplementedError
 
-    def share_info(self, game, self_player, context=None):
+    def share_info(self, player_view: PlayerView, context=None):
         raise NotImplementedError
 
 
 class HumanPlayerController(PlayerController):
-    def choose_fortune_teller_targets(self, candidates, player_view, game=None):
+    def choose_fortune_teller_targets(self, candidates, player_view):
         print("FT Player View", player_view)
         print(
             f"\n{self.player.name} (Fortune Teller): Pick TWO different players to test."
@@ -183,7 +184,7 @@ class HumanPlayerController(PlayerController):
             idx2 = int(input("Enter the number for the second target: "))
         return (candidates[idx1], candidates[idx2])
 
-    def choose_monk_protect(self, candidates, player_view, game=None):
+    def choose_monk_protect(self, candidates, player_view):
         print("Monk Player View", player_view)
         if not candidates:
             return None
@@ -193,7 +194,7 @@ class HumanPlayerController(PlayerController):
         idx = int(input("Enter number: "))
         return candidates[idx]
 
-    def choose_ravenkeeper_reveal(self, candidates, player_view, game=None):
+    def choose_ravenkeeper_reveal(self, candidates, player_view):
         print("Ravenkeeper Player View", player_view)
         if not candidates:
             return None
@@ -205,7 +206,7 @@ class HumanPlayerController(PlayerController):
         idx = int(input("Enter number: "))
         return candidates[idx]
 
-    def choose_imp_kill(self, candidates, player_view, game=None):
+    def choose_imp_kill(self, candidates, player_view):
         print("Imp Player View", player_view)
         if not candidates:
             return None
@@ -215,7 +216,7 @@ class HumanPlayerController(PlayerController):
         idx = int(input("Enter number: "))
         return candidates[idx]
 
-    def choose_poisoner_target(self, candidates, player_view, game=None):
+    def choose_poisoner_target(self, candidates, player_view):
         print("Poisoner Player View", player_view)
         if not candidates:
             return None
@@ -225,7 +226,7 @@ class HumanPlayerController(PlayerController):
         idx = int(input("Enter number: "))
         return candidates[idx]
 
-    def choose_nominee(self, candidates, player_view, game=None):
+    def choose_nominee(self, candidates, player_view):
         print(f"\n{self.player.name}: nominate someone (or Enter to skip).")
         for i, p in enumerate(candidates):
             status = "Alive" if p.alive else "Dead"
@@ -235,11 +236,11 @@ class HumanPlayerController(PlayerController):
             return None
         return candidates[int(resp)]
 
-    def cast_vote(self, nominee, player_view, game=None):
+    def cast_vote(self, nominee, player_view):
         resp = input(f"{self.player.name}: execute {nominee.name}? (y/N): ")
         return resp.strip().lower() == "y"
 
-    def share_info(self, game, self_player, context=None):
+    def share_info(self, player_view: PlayerView, context=None):
         pass
 
 
@@ -290,7 +291,7 @@ class EmpathController(PlayerController):
                     suspicion[n] = suspicion.get(n, 0) + 0.5
         return suspicion
 
-    def cast_vote(self, nominee: "Player", player_view: PlayerView, game=None) -> bool:
+    def cast_vote(self, nominee: "Player", player_view: PlayerView) -> bool:
         latest_info = self.get_latest_empath_info(player_view)
         if not latest_info:
             return False
@@ -304,9 +305,9 @@ class EmpathController(PlayerController):
         # Default: Do not vote unless strong suspicion
         return False
 
-    def share_info(self, game, self_player, context=None):
+    def share_info(self, player_view: PlayerView, context=None):
         if not self.has_claimed:
-            info_list = self_player.player_view.memory.get("night_results", [])
+            info_list = player_view.memory.get("night_results", [])
             if info_list:
                 # Summarize all nights
                 msg = "I am the Empath. My info:\n"
@@ -318,22 +319,17 @@ class EmpathController(PlayerController):
                 )
             else:
                 msg = "I am the Empath. No info yet."
-                for player in game.players:
-                    self.send_info(
-                        player, {"from": self_player.name, "public_announcement": msg}
-                    )
-                self.has_claimed = True
-        elif context == "wakeup" and self_player.alive:
-            latest = self.get_latest_empath_info(self_player.player_view)
+            self.has_claimed = True
+            return {"from": self.player.name, "public_announcement": msg}
+        elif context == "wakeup" and self.player.alive:
+            latest = self.get_latest_empath_info(player_view)
             if latest:
                 msg = (
                     f"Night {latest['night']}: Neighbors {latest['player1']}, "
                     f"{latest['player2']}; Evil Count: {latest['num_evil']}"
                 )
-                for player in game.players:
-                    self.send_info(
-                        player, {"from": self_player.name, "public_announcement": msg}
-                    )
+                return {"from": self.player.name, "public_announcement": msg}
+        return None
 
 
 @dataclass
@@ -374,26 +370,28 @@ class Player:
 
     def choose_fortune_teller_targets(self, game):
         return self.controller.choose_fortune_teller_targets(
-            game.players, game.get_player_view(self), game
+            game.players, game.get_player_view(self)
         )
 
     def choose_monk_protect(self, game):
         candidates = [p for p in game.players if p != self]
         return self.controller.choose_monk_protect(
-            candidates, game.get_player_view(self), game
+            candidates, game.get_player_view(self)
         )
 
     def choose_ravenkeeper_reveal(self, game):
         return self.controller.choose_ravenkeeper_reveal(
-            game.players, game.get_player_view(self), game
+            game.players, game.get_player_view(self)
         )
 
     def choose_imp_kill(self, game):
-        return self.controller.choose_imp_kill(game.players, game.get_player_view(self), game)
+        return self.controller.choose_imp_kill(
+            game.players, game.get_player_view(self)
+        )
 
     def choose_poisoner_target(self, game):
         return self.controller.choose_poisoner_target(
-            game.players, game.get_player_view(self), game
+            game.players, game.get_player_view(self)
         )
 
 
@@ -491,7 +489,11 @@ class Game:
 
     def info_swapping_opportunity(self, context=None):
         for player in self.players:
-            player.controller.share_info(self, player, context)
+            pv = self.get_player_view(player)
+            info = player.controller.share_info(pv, context)
+            if info:
+                for target in self.players:
+                    player.controller.send_info(target, info)
 
     def get_alive_players(self):
         return [p for p in self.players if p.alive]
@@ -534,7 +536,7 @@ class Game:
 
         for nominator in alive_players:
             pv = self.get_player_view(nominator)
-            nominee = nominator.controller.choose_nominee(self.players, pv, self)
+            nominee = nominator.controller.choose_nominee(self.players, pv)
             if nominee is None:
                 continue
             self.state.nominees.append((nominator, nominee))
@@ -564,7 +566,7 @@ class Game:
                     p for p in self.players if p.alive or not p.has_used_dead_vote
                 ]:
                     pv = self.get_player_view(p)
-                    if p.controller.cast_vote(nominee, pv, self):
+                    if p.controller.cast_vote(nominee, pv):
                         votes.append()
                         vote_names.append(p.name)
                         if not p.alive:
@@ -710,6 +712,7 @@ class Game:
             is_alive=player.alive,
             role_claim=player.claim,
             public_claims={p.seat: p.claim for p in self.players},
+            seat_names={p.seat: p.name for p in self.players},
             alive_players=[p.seat for p in self.players if p.alive],
             dead_players=[p.seat for p in self.players if not p.alive],
             memory=player.memory.copy(),
