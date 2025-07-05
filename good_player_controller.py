@@ -130,10 +130,12 @@ class GoodPlayerController(PlayerController):
         final_three = len(alive) == 3
 
         # Chance to skip nomination unless we're in the final three
-        if not final_three and random.random() < 0.3:
-            return None
+        if not final_three:
+            most_sus = max(evil_prob[p.name] for p in others)
+            if most_sus < 20 and random.random() < 0.1:
+                return None
 
-        weights = [max(evil_prob[p.name], 1) for p in others]
+        weights = [max(evil_prob[p.name], 1) ** 1.2 for p in others]
         return random.choices(others, weights=weights, k=1)[0]
 
     def cast_vote(self, nominee: Player, player_view: PlayerView) -> bool:
@@ -168,7 +170,7 @@ class GoodPlayerController(PlayerController):
             if leader and leader != nominee.name and leader_score >= nominee_score:
                 return False
             chance = nominee_score / 100.0
-            return random.random() < max(chance, 0.3)
+            return random.random() < max(chance, 0.4)
 
         # Outside final three -------------------------------------------------
         if leader and leader != nominee.name and leader_score >= nominee_score:
@@ -178,7 +180,7 @@ class GoodPlayerController(PlayerController):
         # Weight vote probability by how suspicious the nominee is
         chance = nominee_score / 100.0
         # Small baseline so highly suspected players are voted more often
-        return random.random() < chance
+        return random.random() < max(chance, .2)
 
     # Night actions --------------------------------------------------------
     def choose_fortune_teller_targets(self, candidates, player_view):

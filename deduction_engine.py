@@ -365,6 +365,15 @@ def _apply_imp_death(world: WorldState, night: int, TB_ROLES) -> List[WorldState
         worlds = next_worlds
     return worlds
 
+def process_soldier(world: WorldState, night: int, TB_ROLES) -> bool:
+    """Return True if the Soldier is recorded as dying at night."""
+    for d in world.deaths:
+        if d.get("night") == night and d.get("time", "night") == "night":
+            if world.roles.get(d.get("player")) == "Soldier":
+                return True
+    return False
+
+
 
 def process_washerwoman(world: WorldState, night: int, TB_ROLES) -> bool:
     if night != 1:
@@ -549,6 +558,7 @@ ROLE_STEPS = [
     process_empath,
     process_fortune_teller,
     process_chef,
+    process_soldier
 ]
 
 

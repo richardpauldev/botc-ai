@@ -479,57 +479,66 @@ class Game:
         nominations = 0
         executed_today = None
 
-        for nominator in alive_players:
-            pv = self.get_player_view(nominator)
-            nominee = nominator.controller.choose_nominee(self.players, pv)
-            if nominee is None:
-                continue
-            self.state.nominees.append((nominator, nominee))
-            nominations += 1
-            print(f"{nominator.name} nominates {nominee.name}")
+        votes_per_nominee = []
+        nominated = set()
+        idx = 0
+        passes = 0
+        while alive_players and passes < len(alive_players):
+            nominator = alive_players[idx]
+            if nominator.seat in nominated:
+                passes += 1
+            else:
+                pv = self.get_player_view(nominator)
+                nominee = nominator.controller.choose_nominee(self.players, pv)
+                if nominee is None:
+                    passes += 1
+                else:
+                    passes = 0
+                    nominated.add(nominator.seat)
+                    self.state.nominees.append((nominator, nominee))
+                    nominations += 1
+                    print(f"{nominator.name} nominates {nominee.name}")
 
-            if hasattr(nominee.role, "on_nominated") and nominee.alive:
-                nominee.role.on_nominated(nominee, nominator, self)
-                if not nominator.alive:
-                    print(f"{nominator.name} executed by Virgin's ability!")
-                    break
-        all_votes = {}
+                    if hasattr(nominee.role, "on_nominated") and nominee.alive:
+                        nominee.role.on_nominated(nominee, nominator, self)
+                        if not nominator.alive:
+                            print(f"{nominator.name} executed by Virgin's ability!")
+                            alive_players = self.get_alive_players()
+                            if not alive_players:
+                                break
+                            idx %= len(alive_players)
+                            continue
 
-        if not executed_today and self.state.nominees:
-            print("\n--- Voting Phase ---")
+                    votes = []
+                    vote_names = []
+                    voters = [p for p in self.players if p.alive or not p.has_used_dead_vote]
+                    start = (nominee.seat + 1) % len(self.players)
+                    order = [self.players[(start + i) % len(self.players)] for i in range(len(self.players))]
+                    for voter in order:
+                        if voter not in voters:
+                            continue
+                        if voter.controller.cast_vote(nominee, pv):
+                            votes.append(voter)
+                            vote_names.append(voter.name)
+                            if not voter.alive:
+                                voter.has_used_dead_vote = True
+                    print(f"Votes for {nominee.name}: {len(votes)}")
+                    votes_per_nominee.append((nominee, votes))
+                    self.state.votes[nominee.name] = vote_names
+
+            idx = (idx + 1) % len(alive_players)
             alive_players = self.get_alive_players()
-            required_votes = (len(alive_players) + 1) // 2  # Half, rounded up
-            print(f"Votes required to execute: {required_votes}\n")
-            votes_per_nominee = []
-            for idx, (nominator, nominee) in enumerate(self.state.nominees):
-                print(
-                    f"\nNominee {idx}: {nominee.name} (nominated by {nominator.name})"
-                )
-                votes = []
-                vote_names = []
-                for p in [
-                    p for p in self.players if p.alive or not p.has_used_dead_vote
-                ]:
-                    pv = self.get_player_view(p)
-                    if p.controller.cast_vote(nominee, pv):
-                        votes.append(p)
-                        vote_names.append(p.name)
-                        if not p.alive:
-                            p.has_used_dead_vote = True
-                print(f"Votes for {nominee.name}: {len(votes)}")
-                votes_per_nominee.append((nominee, votes))
-                all_votes[nominee.name] = vote_names
 
-            self.state.votes = all_votes  # TODO don't override
-
+        if self.state.nominees:
             print("\nVoting summary:")
-            for nominee, names in all_votes.items():
+            for nominee, names in self.state.votes.items():
                 print(f"  {nominee}: {len(names)} votes - [{', '.join(names)}]")
 
-            # Determine maximum vote count
-            max_votes = max(
-                (len(votes) for nominee, votes in votes_per_nominee), default=0
-            )
+            alive_players = self.get_alive_players()
+            required_votes = (len(alive_players) + 1) // 2
+            print(f"\nVotes required to execute: {required_votes}\n")
+
+            max_votes = max((len(v) for v in self.state.votes.values()), default=0)
             top_nominees = [
                 nominee
                 for nominee, votes in votes_per_nominee
@@ -571,7 +580,7 @@ class Game:
                 print("\nNo one was executed today.")
                 self.state.executed_today = None
 
-        if nominations < 1:
+        else:
             print("\nNo nominations today.")
             self.state.executed_today = None
 
