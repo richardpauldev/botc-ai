@@ -449,8 +449,7 @@ class Game:
         random.shuffle(roles)
         for player, role in zip(self.players, roles):
             player.assign_role(role)
-            # Default claim uses deduction-engine fields
-            player.claim = {"role": role.name}
+            player.claim = None
 
     def assign_evil_info_and_bluffs(self):
         evil_team = [
@@ -701,6 +700,10 @@ class Game:
                     return
 
     def get_player_view(self, player):
+        if self.state.night == 0 and self.state.phase == Phase.NIGHT:
+            claims = {}
+        else:
+            claims = {p.seat: p.claim for p in self.players if p.claim is not None}
         return PlayerView(
             player_seat=player.seat,
             player_name=player.name,
@@ -714,7 +717,7 @@ class Game:
             night=self.state.night,
             is_alive=player.alive,
             role_claim=player.claim,
-            public_claims={p.seat: p.claim for p in self.players},
+            public_claims=claims,
             seat_names={p.seat: p.name for p in self.players},
             alive_players=[p.seat for p in self.players if p.alive],
             dead_players=[p.seat for p in self.players if not p.alive],

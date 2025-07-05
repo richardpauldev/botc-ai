@@ -36,15 +36,18 @@ def construct_info_claim_dict(player: str, claim: dict) -> Optional[dict]:
 
     for f in fields:
         value = claim.get(f)
-        if f == "night_results" and isinstance(value, list):
-            subfields = nr_subfields.get(role.lower())
-            if subfields:
-                info[f] = [
-                    {k: entry.get(k) for k in subfields}
-                    for entry in value
-                ]
+        if f == "night_results":
+            if isinstance(value, list):
+                subfields = nr_subfields.get(role.lower())
+                if subfields:
+                    info[f] = [
+                        {k: entry.get(k) for k in subfields}
+                        for entry in value
+                    ]
+                else:
+                    info[f] = value
             else:
-                info[f] = value
+                info[f] = []
         else:
             info[f] = value
     return info
