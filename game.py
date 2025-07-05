@@ -399,6 +399,12 @@ class Game:
 
     def info_swapping_opportunity(self, context=None):
         for player in self.players:
+            if player.claim is not None:
+                claim_msg = {"from": player.name, "public_claim": player.claim}
+                for target in self.players:
+                    player.controller.send_info(target, claim_msg)
+
+            # Additonal Information
             pv = self.get_player_view(player)
             info = player.controller.share_info(pv, context)
             if info:
@@ -441,6 +447,8 @@ class Game:
         for p in self.players:
             print(p.seat, p.name, self.get_player_view(p))
         alive_players = self.get_alive_players()
+
+        self.info_swapping_opportunity(context="wakeup")
 
         self.state.nominees = []
         self.state.votes = {}
