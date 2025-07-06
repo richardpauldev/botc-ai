@@ -145,6 +145,10 @@ class EvilPlayerController(PlayerController):
                 best_score = score
         return best if best else (random.choice(targets) if targets else None)
 
+    def choose_master(self, candidates, player_view):
+        others = [p for p in candidates if p != self.player]
+        return random.choice(others) if others else None
+
     # Bluffing -------------------------------------------------------------
     def _select_bluff(self, player_view):
         bluffs = self.player.memory.get("bluffs")

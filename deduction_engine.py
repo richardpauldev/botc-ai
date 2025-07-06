@@ -350,7 +350,8 @@ def _apply_imp_death(world: WorldState, night: int, TB_ROLES) -> List[WorldState
     for d in world.deaths:
         if d.get("night") != night:
             continue
-        if world.roles.get(d.get("player")) != "Imp":
+        player = d.get("player")
+        if not player or world.roles.get(player) != "Imp":
             continue
         time = d.get("time", "night")
         next_worlds = []
@@ -369,7 +370,8 @@ def process_soldier(world: WorldState, night: int, TB_ROLES) -> bool:
     """Return True if the Soldier is recorded as dying at night."""
     for d in world.deaths:
         if d.get("night") == night and d.get("time", "night") == "night":
-            if world.roles.get(d.get("player")) == "Soldier":
+            player = d.get("player")
+            if player and world.roles.get(player) == "Soldier":
                 return True
     return False
 
@@ -434,8 +436,13 @@ def process_ravenkeeper(world: WorldState, night: int, TB_ROLES) -> bool:
     for info in _trustworthy_claims(world, "ravenkeeper"):
         # print(info)
         if info.get("night") == night:
-            if world.roles.get(info.get("seen_player")) != info.get("seen_role") and not world.roles.get(info.get("seen_player")) == "Spy":
-                return False
+            player = info.get("seen_player")
+            if player:
+                role = world.roles.get(player)
+                seen_role = info.get("seen_role")
+                if role != seen_role and role != "Spy":
+                    return False
+            
     return True
 
 
@@ -445,7 +452,7 @@ def process_slayer(world: WorldState, night: int, TB_ROLES) -> bool:
             shot = info.get("shot_player")
             died = info.get("died")
             claimer = info.get("claimer")
-            is_imp = world.roles.get(shot) in ["Imp", "Recluse"]
+            is_imp = shot is not None and world.roles.get(shot) in ["Imp", "Recluse"]
             if died and not is_imp:
                 return False
             if not died and is_imp:

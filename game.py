@@ -222,6 +222,9 @@ class PlayerController:
     def choose_poisoner_target(self, candidates, player_view):
         raise NotImplementedError
 
+    def choose_master(self, candidates, player_view):
+        raise NotImplementedError
+
     def choose_nominee(self, candidates: list, player_view: PlayerView):
         raise NotImplementedError
 
@@ -367,6 +370,10 @@ class Player:
         return self.controller.choose_poisoner_target(
             game.players, game.get_player_view(self)
         )
+    
+    def choose_master(self, game):
+        candidates = [p for p in game.players if p != self]
+        return self.controller.choose_master(candidates, game.get_player_view(self))
 
 
 @dataclass

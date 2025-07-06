@@ -226,6 +226,14 @@ class GoodPlayerController(PlayerController):
                 best = p
                 best_score = score
         return best
+    
+    def choose_master(self, candidates, player_view):
+        evil_prob, _ = self._evil_imp_probs(player_view)
+        others = [p for p in candidates if p != self.player]
+        if not others:
+            return None
+        best = max(others, key=lambda p: 100 - evil_prob[p.name])
+        return best
 
     def choose_ravenkeeper_reveal(self, candidates, player_view):
 
