@@ -316,7 +316,8 @@ class Player:
     seat: int
     name: str
     controller: PlayerController
-    role: Role | None = None
+    # role is assigned after game setup; use a placeholder Role to avoid Optional checks
+    role: Role = field(init=False)
     alive: bool = True
     memory: dict = field(default_factory=dict)
     claim: dict | None = None
@@ -325,6 +326,8 @@ class Player:
 
     def __post_init__(self) -> None:
         self.controller.set_player(self)
+        # Initialize with a placeholder role until roles are assigned
+        self.role = Role("Unassigned", Alignment.TOWNSFOLK)
 
     def assign_role(self, role: Role) -> None:
         self.role = role
@@ -341,7 +344,7 @@ class Player:
         )
 
     def __repr__(self):
-        role_name = self.role.name if self.role is not None else "None"
+        role_name = self.role.name
         status = "Alive" if self.alive else "Dead"
         return f"{self.name} ({role_name}) - {status}"
 
@@ -389,10 +392,10 @@ class GameState:
     dead_players: set = field(default_factory=set)
     grimoire: dict = field(default_factory=dict)
     history: list = field(default_factory=list)
-    executed_today: "Player" | None = None
+    executed_today: Player | None = None
     pending_deaths: set = field(default_factory=set)
-    monk_protected: "Player" | None = None
-    demon_bluffs = None
+    monk_protected: Player | None = None
+    demon_bluffs: list[str] | None = None
 
     def queue_death(self, player):
         self.pending_deaths.add(player.seat)
@@ -450,10 +453,12 @@ class Game:
         )
         # Remove roles actually in play (except Drunk's cover role)
         in_play = [
-            p.role.cover_role_name if p.role.name == "Drunk" else p.role.name
+            p.role.cover_role_name if isinstance(p.role, Drunk) else p.role.name
             for p in self.players
         ]
-        in_play.append([p.role.name for p in self.players if p.role.name == "Drunk"])
+        in_play.extend([
+            p.role.name for p in self.players if isinstance(p.role, Drunk)
+        ])
         bluff_pool = [r for r in all_good_roles if r not in in_play and r != "Drunk"]
         # Choose 3 bluffs randomly
         bluffs = random.sample(bluff_pool, k=3) if len(bluff_pool) >= 3 else bluff_pool
@@ -612,12 +617,8 @@ class Game:
                 self.execute_player(executed_today)
                 self.state.executed_today = executed_today
                 # Saint check (with drunk/poisoned check)
-                if executed_today.role.name == "Saint":
-                    ai = (
-                        executed_today.role.storyteller_ai
-                        if hasattr(executed_today.role, "storyteller_ai")
-                        else None
-                    )
+                if executed_today is not None and executed_today.role.name == "Saint":
+                    ai = getattr(executed_today.role, "storyteller_ai", None)
                     is_drunk_poisoned = (
                         ai.is_drunk_or_poisoned(executed_today, self) if ai else False
                     )
@@ -699,7 +700,7 @@ class Game:
         if killed_player.role.name != "Imp":
             return
         for p in self.get_alive_players():
-            if p.role.name == "Scarlet Woman":
+            if isinstance(p.role, ScarletWoman):
                 ai = p.role.storyteller_ai
                 is_drunk_poisoned = ai.is_drunk_or_poisoned(p, self)
                 if not is_drunk_poisoned:
@@ -1353,6 +1354,8 @@ class Empath(Role):
 
     def night_action(self, player, game):
         alive_players = [p for p in game.players if p.alive]
+        left: Player | None = None
+        right: Player | None = None
         if len(alive_players) < 3:
             evil_count = 0
         else:
@@ -1367,8 +1370,8 @@ class Empath(Role):
         player.memory.setdefault("night_results", []).append(
             {
                 "night": game.state.night,
-                "player1": left.name,
-                "player2": right.name,
+                "player1": left.name if left else None,
+                "player2": right.name if right else None,
                 "num_evil": empath_info,
             }
         )
