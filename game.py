@@ -95,6 +95,7 @@ def create_role(role_name, storyteller_ai):
         "Ravenkeeper": Ravenkeeper,
         "Virgin": Virgin,
         "Slayer": Slayer,
+        "Saint": Saint,
         "Poisoner": Poisoner,
         "Spy": Spy,
         "Baron": Baron,
@@ -154,6 +155,45 @@ def player_role_counts(num_players: int) -> tuple[int, int]:
         minions = 3
     return minions, outsider_count
 
+def random_trouble_brewing_setup(player_count: int, storyteller_ai: StorytellerAI) -> list[Role]:
+    minion_count, outsider_count = player_role_counts(player_count)
+
+    minion_names = random.sample(TROUBLE_BREWING_ROLES[Alignment.MINION], k=minion_count)
+
+    if "Baron" in minion_names:
+        outsider_count += 2
+
+    demon_name = random.choice(TROUBLE_BREWING_ROLES[Alignment.DEMON])
+
+    townsfolk_count = player_count - outsider_count - minion_count - 1
+
+    roles: list[Role] = []
+
+    for m in minion_names:
+        roles.append(create_role(m, storyteller_ai))
+
+    roles.append(create_role(demon_name, storyteller_ai))
+
+    outsider_pool = TROUBLE_BREWING_ROLES[Alignment.OUTSIDER][:]
+    outsider_choices = (
+        random.sample(outsider_pool, k=outsider_count)
+        if outsider_count > 0
+        else []
+    )
+
+
+    townsfolk_pool = TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK][:]
+    townsfolk_choices = random.sample(townsfolk_pool, k=townsfolk_count)
+    roles.extend(create_role(t, storyteller_ai) for t in townsfolk_choices)
+
+    for o in outsider_choices:
+        if o == "Drunk":
+            cover = random.choice([role for role in TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK] if role not in townsfolk_choices])
+            roles.append(Drunk(storyteller_ai, cover_role_name=cover))
+        else:
+            roles.append(create_role(o, storyteller_ai))
+
+    return roles
 
 class PlayerController:
     def __init__(self):
@@ -343,6 +383,7 @@ class GameState:
     executed_today: "Player" | None = None
     pending_deaths: set = field(default_factory=set)
     monk_protected: "Player" | None = None
+    demon_bluffs = None
 
     def queue_death(self, player):
         self.pending_deaths.add(player.seat)
@@ -404,11 +445,17 @@ class Game:
             for p in self.players
         ]
         in_play.append([p.role.name for p in self.players if p.role.name == "Drunk"])
-        bluff_pool = [r for r in all_good_roles if r not in in_play]
+        bluff_pool = [r for r in all_good_roles if r not in in_play and r != "Drunk"]
         # Choose 3 bluffs randomly
         bluffs = random.sample(bluff_pool, k=3) if len(bluff_pool) >= 3 else bluff_pool
         if demon:
-            demon.memory["bluffs"] = bluffs
+            demon.memory["bluffs"] = bluffs    
+            self.state.demon_bluffs = bluffs
+            for p in evil_team:
+                if p is demon:
+                    continue
+                p.memory["bluffs"] = bluffs
+                demon.controller.send_info(p, {"bluffs": bluffs})        
 
         # --- 2. Share Evil Team Info with All Evil Players ---
         evil_team_info = [
@@ -1531,18 +1578,12 @@ if __name__ == "__main__":
     from good_player_controller import GoodPlayerController
     from evil_player_controller import EvilPlayerController
 
-    roles = [
-        Washerwoman(DumbStorytellerAI()),
-        Librarian(DumbStorytellerAI()),
-        Investigator(DumbStorytellerAI()),
-        Chef(DumbStorytellerAI()),
-        Undertaker(DumbStorytellerAI()),
-        Saint(DumbStorytellerAI()),
-        ScarletWoman(DumbStorytellerAI()),
-        Imp(DumbStorytellerAI()),
-    ]
+    ai = DumbStorytellerAI()
 
-    player_names = [f"Player {i+1}" for i in range(len(roles))]
+    player_count = 8
+    player_names = [f"Player {i+1}" for i in range(player_count)]
+    roles = random_trouble_brewing_setup(player_count, ai)
+
     game = Game(player_names, roles)
 
     # Replace default Human controllers with AI controllers based on alignment
