@@ -35,12 +35,6 @@ class EvilPlayerController(PlayerController):
         claims = {}
         for seat, name in player_view.seat_names.items():
             c = dict(player_view.public_claims.get(seat, {}) or {})
-            if seat == player_view.player_seat:
-                c["role"] = player_view.role_name
-                if "night_results" in player_view.memory:
-                    c["night_results"] = player_view.memory["night_results"]
-                if "info" in player_view.memory:
-                    c.update(player_view.memory["info"])
             claims[name] = c
 
         try:

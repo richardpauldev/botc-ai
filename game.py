@@ -481,6 +481,7 @@ class Game:
 
         votes_per_nominee = []
         nominated = set()
+        already_nominated = set()
         idx = 0
         passes = 0
         while alive_players and passes < len(alive_players):
@@ -489,12 +490,16 @@ class Game:
                 passes += 1
             else:
                 pv = self.get_player_view(nominator)
-                nominee = nominator.controller.choose_nominee(self.players, pv)
-                if nominee is None:
+                valid_nominees = [
+                    p for p in self.players if p.seat not in already_nominated
+                ]
+                nominee = nominator.controller.choose_nominee(valid_nominees, pv)
+                if nominee is None or nominee.seat in already_nominated:
                     passes += 1
                 else:
                     passes = 0
                     nominated.add(nominator.seat)
+                    already_nominated.add(nominee.seat)
                     self.state.nominees.append((nominator, nominee))
                     nominations += 1
                     print(f"{nominator.name} nominates {nominee.name}")
