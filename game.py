@@ -195,9 +195,11 @@ def random_trouble_brewing_setup(player_count: int, storyteller_ai: StorytellerA
 
     return roles
 
+from typing import cast
+
 class PlayerController:
     def __init__(self):
-        self.player = None
+        self.player: Player = cast(Player, None)
 
     def set_player(self, player):
         self.player = player
