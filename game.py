@@ -324,6 +324,9 @@ class Player:
     votes_today: int = 0
     has_used_dead_vote: bool = False
 
+    def __hash__(self) -> int:
+        return hash(self.seat)
+
     def __post_init__(self) -> None:
         self.controller.set_player(self)
         # Initialize with a placeholder role until roles are assigned
