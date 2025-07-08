@@ -724,7 +724,7 @@ class Game:
             role_name=(
                 player.role.name
                 if player.role.name != "Drunk"
-                else player.cover_role_name
+                else player.role.cover_role_name
             ),
             phase=self.state.phase,
             day=self.state.day,
