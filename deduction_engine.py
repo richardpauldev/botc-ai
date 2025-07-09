@@ -506,7 +506,7 @@ def process_fortune_teller(world: WorldState, night: int, TB_ROLES) -> bool:
                 if world.red_herring and world.red_herring in players:
                     demon_seen = True
                 if bool(entry.get("ping")) != demon_seen:
-                    print("rejected", world.red_herring)
+                    # print("rejected", world.red_herring)
                     return False
     return True
 

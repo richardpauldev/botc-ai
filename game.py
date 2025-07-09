@@ -3,6 +3,7 @@ from enum import Enum, auto
 import random
 from dataclasses import dataclass, field
 import builtins
+from pprint import pformat
 
 # Toggle detailed debug logging
 DEBUG = False
@@ -62,8 +63,30 @@ class PlayerView:
         return (
             f"PlayerView(seat={self.player_seat}, name={self.player_name}), "
             f"role={self.role_name}, phase={self.phase.name}, day={self.day}, "
-            f"alive={self.is_alive})" 
+            f"alive={self.is_alive})"
         )
+
+
+def format_player_view(pv: PlayerView) -> str:
+    """Return a human friendly string representation of ``PlayerView``."""
+    lines = [
+        f"--- {pv.player_name}'s view ---",
+        f"Phase: {pv.phase.name} (Day {pv.day}, Night {pv.night})",
+        f"Role: {pv.role_name} | {'Alive' if pv.is_alive else 'Dead'}",
+        "Alive players: " + ", ".join(pv.seat_names[s] for s in pv.alive_players),
+    ]
+    if pv.dead_players:
+        lines.append(
+            "Dead players: " + ", ".join(pv.seat_names[s] for s in pv.dead_players)
+        )
+    if pv.public_claims:
+        claims = {pv.seat_names[s]: c for s, c in pv.public_claims.items()}
+        lines.append("Public claims: " + pformat(claims))
+    if pv.memory:
+        lines.append("Your memory: " + pformat(pv.memory))
+    if pv.votes:
+        lines.append("Votes: " + pformat(pv.votes))
+    return "\n".join(lines)
 
 class Role:
     """
@@ -237,10 +260,8 @@ class PlayerController:
 
 class HumanPlayerController(PlayerController):
     def choose_fortune_teller_targets(self, candidates, player_view):
-        print("FT Player View", player_view)
-        print(
-            f"\n{self.player.name} (Fortune Teller): Pick TWO different players to test."
-        )
+        print(format_player_view(player_view))
+        print(f"\n{self.player.name} (Fortune Teller): Pick TWO different players to test.")
         for i, p in enumerate(candidates):
             print(f"{i}: {p.name} ({p.role.name})")
         idx1 = int(input("Enter the number for the first target: "))
@@ -251,7 +272,7 @@ class HumanPlayerController(PlayerController):
         return (candidates[idx1], candidates[idx2])
 
     def choose_monk_protect(self, candidates, player_view):
-        print("Monk Player View", player_view)
+        print(format_player_view(player_view))
         if not candidates:
             return None
         print(f"\n{self.player.name} (Monk): Pick a player to protect tonight.")
@@ -261,7 +282,7 @@ class HumanPlayerController(PlayerController):
         return candidates[idx]
 
     def choose_ravenkeeper_reveal(self, candidates, player_view):
-        print("Ravenkeeper Player View", player_view)
+        print(format_player_view(player_view))
         if not candidates:
             return None
         print(
@@ -273,7 +294,7 @@ class HumanPlayerController(PlayerController):
         return candidates[idx]
 
     def choose_imp_kill(self, candidates, player_view):
-        print("Imp Player View", player_view)
+        print(format_player_view(player_view))
         if not candidates:
             return None
         print(f"\n{self.player.name} (Imp): Pick a player to kill tonight.")
@@ -283,7 +304,7 @@ class HumanPlayerController(PlayerController):
         return candidates[idx]
 
     def choose_poisoner_target(self, candidates, player_view):
-        print("Poisoner Player View", player_view)
+        print(format_player_view(player_view))
         if not candidates:
             return None
         print(f"\n{self.player.name} (Poisoner): Pick a player to poison tonight.")
@@ -293,6 +314,7 @@ class HumanPlayerController(PlayerController):
         return candidates[idx]
 
     def choose_nominee(self, candidates, player_view):
+        print(format_player_view(player_view))
         print(f"\n{self.player.name}: nominate someone (or Enter to skip).")
         for i, p in enumerate(candidates):
             status = "Alive" if p.alive else "Dead"
@@ -345,6 +367,13 @@ class Player:
         self.memory.setdefault("received_info", []).append(
             {"from": from_player.name, "info": info}
         )
+
+        if isinstance(self.controller, HumanPlayerController):
+            print(
+                f"\nInfo received by {self.name} from {from_player.name}:"
+            )
+            print(pformat(info))
+            print()
 
     def __repr__(self):
         role_name = self.role.name
@@ -432,6 +461,13 @@ class Game:
         for p in self.players:
             self.state.grimoire[p.seat] = p
 
+    def display_state(self):
+        """Print a concise summary of the current game state."""
+        print("\nCurrent Game State:")
+        for p in self.players:
+            status = "Alive" if p.alive else "Dead"
+            print(f"  {p.name} [{p.role.name}] - {status}")
+
     def assign_roles(self):
         roles = self.roles.copy()
         random.shuffle(roles)
@@ -506,15 +542,14 @@ class Game:
 
         self.state.night += 1
         print(f"\n==== NIGHT {self.state.night} ====")  # start of night_phase
-        for p in self.players:
-            print(self.get_player_view(p))
+        self.display_state()
 
         
         self.state.monk_protected = None
         for player in self.get_alive_players():
             player.role.night_action(player, self)
             print(
-                f"{player.name} ({player.role.name}) night summary: {player.memory}"
+                f"Night summary for {player.name} ({player.role.name}): {pformat(player.memory)}"
             )
         self.state.advance_phase()
 
@@ -534,8 +569,7 @@ class Game:
         self.info_swapping_opportunity(context="wakeup")
 
         print("Players Info:")
-        for p in self.players:
-            print(self.get_player_view(p))
+        self.display_state()
         alive_players = self.get_alive_players()
 
         self.state.nominees = []
@@ -548,6 +582,8 @@ class Game:
         already_nominated = set()
         idx = 0
         passes = 0
+        executed_today = None
+        print
         while alive_players and passes < len(alive_players):
             nominator = alive_players[idx]
             if nominator.seat in nominated:
@@ -576,7 +612,8 @@ class Game:
                             if not alive_players:
                                 break
                             idx %= len(alive_players)
-                            continue
+                            executed_today = nominator
+                            break
 
                     votes = []
                     vote_names = []
@@ -597,8 +634,11 @@ class Game:
 
             idx = (idx + 1) % len(alive_players)
             alive_players = self.get_alive_players()
-
-        if self.state.nominees:
+        
+        if executed_today:
+            self.state.executed_today = executed_today
+            print("Virgin triggered, ending day")
+        elif self.state.nominees:
             print("\nVoting summary:")
             for nominee, names in self.state.votes.items():
                 print(f"  {nominee}: {len(names)} votes - [{', '.join(names)}]")
@@ -1601,13 +1641,19 @@ if __name__ == "__main__":
 
     game = Game(player_names, roles)
 
-    # Replace default Human controllers with AI controllers based on alignment
-    for p in game.players:
+    human_idx = random.randrange(len(game.players))
+    for idx, p in enumerate(game.players):
+        if idx == human_idx:
+            continue
         if p.role.alignment in (Alignment.MINION, Alignment.DEMON):
             p.controller = EvilPlayerController()
         else:
             p.controller = GoodPlayerController()
         p.controller.set_player(p)
 
-    print("Starting automated game with AI players...\n")
+    print(f"Human player is {game.players[human_idx].name} as {game.players[human_idx].role.name}\n")
+    print("Starting game...\n")    
     game.run()
+
+
+    # TODO: Better bluffs/ Confirmation increase 'trust'
