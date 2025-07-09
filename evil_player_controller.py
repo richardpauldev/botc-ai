@@ -216,7 +216,8 @@ class EvilPlayerController(PlayerController):
                         "num_evil": 0,
                     }
                 ]
-            }        if bluff_role == "Fortune Teller":
+            }        
+        if bluff_role == "Fortune Teller":
             return {"night_results": [{"night": 1, "player1": others[0], "player2": others[1], "ping": False}]}
         if bluff_role == "Undertaker":
             return {"night_results": []}
