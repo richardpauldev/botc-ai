@@ -329,7 +329,43 @@ class HumanPlayerController(PlayerController):
         return resp.strip().lower() == "y"
 
     def share_info(self, player_view: PlayerView, context=None):
-        pass
+        print(format_player_view(player_view))
+        if self.player.role in TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK] + TROUBLE_BREWING_ROLES[Alignment.OUTSIDER]:
+            if self.player.claim is None:
+                claim = {"role": player_view.role_name}
+                if "night_results" in player_view.memory:
+                    claim["night_results"] = player_view.memory["night_results"]
+                if "info" in player_view.memory:
+                    info = player_view.memory["info"]
+                    if isinstance(info, dict):
+                        claim.update(info)
+                    else:
+                        claim["info"] = info
+
+                self.player.claim = claim
+                self._last_public = claim
+                return {"public_claim": self.player.claim}
+            info = {
+                k: v
+                for k, v in self.player.memory.items()
+                if k != "received_info"
+            }
+            if info and info != self._last_public:
+                self._last_public = info
+                return {"public": info}
+            return None
+
+
+        elif self.player.claim is None:
+            claim = input(
+                f"{self.player.name}: Enter a role to claim (or press Enter to stay silent): "
+            ).strip()
+            if claim:
+                self.player.claim = {"role": claim}
+                return {"public_claim": self.player.claim}
+            return None
+        return None
+
 
 @dataclass
 class Player:
