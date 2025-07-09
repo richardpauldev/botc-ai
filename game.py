@@ -451,7 +451,7 @@ class Game:
 
     def __init__(self, player_names, role_list):
         self.players = [
-            Player(i, name, HumanPlayerController())
+            Player(i, name, PlayerController())
             for i, name in enumerate(player_names)
         ]
         self.state = GameState(len(self.players))
@@ -1648,8 +1648,8 @@ if __name__ == "__main__":
     human_idx = random.randrange(len(game.players))
     for idx, p in enumerate(game.players):
         if idx == human_idx:
-            continue
-        if p.role.alignment in (Alignment.MINION, Alignment.DEMON):
+            p.controller = HumanPlayerController()
+        elif p.role.alignment in (Alignment.MINION, Alignment.DEMON):
             p.controller = EvilPlayerController()
         else:
             p.controller = GoodPlayerController()
