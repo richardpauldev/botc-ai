@@ -120,9 +120,10 @@ class GoodPlayerController(PlayerController):
     ):
         """Pick someone to nominate based on evil probability.
 
-        A player will sometimes decline to nominate, but must do so when only
-        three players remain. Nomination choices are weighted toward players
-        believed to be evil rather than always picking the single top suspect.
+        This implementation selects the most suspicious living player and
+        attempts to nominate them. If that player has already been nominated,
+        the controller declines to nominate anyone else, leading to fewer
+        overall nominations.
         """
         alive = self._alive_players(candidates, player_view)
         evil_prob, _ = self._evil_imp_probs(player_view)
@@ -133,14 +134,10 @@ class GoodPlayerController(PlayerController):
 
         final_three = len(alive) == 3
 
-        # Chance to skip nomination unless we're in the final three
-        if not final_three:
-            most_sus = max(evil_prob[p.name] for p in others)
-            if most_sus < 20 and random.random() < 0.1:
-                return None
+        ranked = sorted(others, key=lambda p: evil_prob[p.name], reverse=True)
+        target = ranked[0]
 
-        weights = [max(evil_prob[p.name], 1) ** 1.2 for p in others]
-        return random.choices(others, weights=weights, k=1)[0]
+        if target
 
     def cast_vote(self, nominee: Player, player_view: PlayerView) -> bool:
         """Decide whether to vote for a nominee.
@@ -182,9 +179,9 @@ class GoodPlayerController(PlayerController):
             return False
 
         # Weight vote probability by how suspicious the nominee is
-        chance = nominee_score / 100.0
+        chance = (nominee_score - leader_score) / 50.0
         # Small baseline so highly suspected players are voted more often
-        return random.random() < max(chance, .2)
+        return random.random() < max(chance, .5)
 
     # Night actions --------------------------------------------------------
     def choose_fortune_teller_targets(self, candidates, player_view):

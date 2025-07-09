@@ -593,10 +593,7 @@ class Game:
                 passes += 1
             else:
                 pv = self.get_player_view(nominator)
-                valid_nominees = [
-                    p for p in self.players if p.seat not in already_nominated
-                ]
-                nominee = nominator.controller.choose_nominee(valid_nominees, pv)
+                nominee = nominator.controller.choose_nominee(self.players, pv)
                 if nominee is None or nominee.seat in already_nominated:
                     nominated.add(nominator.seat)
                     passes += 1
