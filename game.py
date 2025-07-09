@@ -520,12 +520,12 @@ class Game:
 
     def info_swapping_opportunity(self, context=None):
         for player in self.players:
-            if player.claim is not None:
-                claim_msg = {"from": player.name, "public_claim": player.claim}
-                for target in self.players:
-                    if target is player:
-                        continue
-                    player.controller.send_info(target, claim_msg)
+            # if player.claim is not None:
+            #     claim_msg = {"from": player.name, "public_claim": player.claim}
+            #     for target in self.players:
+            #         if target is player:
+            #             continue
+            #         player.controller.send_info(target, claim_msg)
 
             # Additonal Information
             pv = self.get_player_view(player)
@@ -1477,7 +1477,7 @@ class Monk(Role):
             player.memory.setdefault("info", []).append(
                 {
                     "night": game.state.night,
-                    "executed": target.name if target else None,
+                    "protected": target.name if target else None,
                 }
             )
 

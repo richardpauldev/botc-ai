@@ -23,6 +23,10 @@ from game import (
 class GoodPlayerController(PlayerController):
     """A simple AI for good players using deduction heuristics."""
 
+    def __init__(self):
+        super().__init__()
+        self._last_public = None
+
     def _evil_imp_probs(self, player_view: PlayerView) -> Tuple[dict, dict]:
         """Run deduction using only the provided ``PlayerView``."""
         TB_ROLES = {
@@ -260,13 +264,22 @@ class GoodPlayerController(PlayerController):
             if "night_results" in player_view.memory:
                 claim["night_results"] = player_view.memory["night_results"]
             if "info" in player_view.memory:
-                claim.update(player_view.memory["info"])
+                info = player_view.memory["info"]
+                if isinstance(info, dict):
+                    claim.update(info)
+                else:
+                    claim["info"] = info
+
             self.player.claim = claim
+            self._last_public = claim
             return {"from": self.player.name, "public_claim": self.player.claim}
         info = {
             k: v
             for k, v in self.player.memory.items()
             if k != "received_info"
         }
-        return {"from": self.player.name, "public": info}
+        if info and info != self._last_public:
+            self._last_public = info
+            return {"from": self.player.name, "public": info}
+        return None
 
