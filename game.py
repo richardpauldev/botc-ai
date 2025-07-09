@@ -523,6 +523,8 @@ class Game:
             if player.claim is not None:
                 claim_msg = {"from": player.name, "public_claim": player.claim}
                 for target in self.players:
+                    if target is player:
+                        continue
                     player.controller.send_info(target, claim_msg)
 
             # Additonal Information
@@ -530,6 +532,8 @@ class Game:
             info = player.controller.share_info(pv, context)
             if info:
                 for target in self.players:
+                    if target is player:
+                        continue
                     player.controller.send_info(target, info)
 
     def get_alive_players(self):
@@ -583,7 +587,6 @@ class Game:
         idx = 0
         passes = 0
         executed_today = None
-        print
         while alive_players and passes < len(alive_players):
             nominator = alive_players[idx]
             if nominator.seat in nominated:
@@ -595,6 +598,7 @@ class Game:
                 ]
                 nominee = nominator.controller.choose_nominee(valid_nominees, pv)
                 if nominee is None or nominee.seat in already_nominated:
+                    nominated.add(nominator.seat)
                     passes += 1
                 else:
                     passes = 0
