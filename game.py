@@ -1663,3 +1663,4 @@ if __name__ == "__main__":
 
 
     # TODO: Better bluffs/ Confirmation increase 'trust'
+    # TODO: Better non-claimed role logic. 

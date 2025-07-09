@@ -197,8 +197,26 @@ class EvilPlayerController(PlayerController):
         if bluff_role == "Chef":
             return {"pairs": 0}
         if bluff_role == "Empath":
-            return {"night_results": [{"night": 1, "player1": others[0], "player2": others[1], "num_evil": 0}]}
-        if bluff_role == "Fortune Teller":
+            alive = player_view.alive_players
+            if len(alive) >= 3 and player_view.player_seat in alive:
+                idx = alive.index(player_view.player_seat)
+                left_seat = alive[(idx - 1) % len(alive)]
+                right_seat = alive[(idx + 1) % len(alive)]
+                left = player_view.seat_names[left_seat]
+                right = player_view.seat_names[right_seat]
+            else:
+                left = None
+                right = None
+            return {
+                "night_results": [
+                    {
+                        "night": 1,
+                        "player1": left,
+                        "player2": right,
+                        "num_evil": 0,
+                    }
+                ]
+            }        if bluff_role == "Fortune Teller":
             return {"night_results": [{"night": 1, "player1": others[0], "player2": others[1], "ping": False}]}
         if bluff_role == "Undertaker":
             return {"night_results": []}
