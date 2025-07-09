@@ -103,7 +103,7 @@ class EvilPlayerController(PlayerController):
         return random.choice(goods) if goods else None
 
     def choose_imp_kill(self, candidates, player_view):
-        targets = [p for p in candidates if p.alive and p != self.player]
+        alive_seats = set(player_view.alive_players)
 
         evil_prob, imp_prob = self._evil_imp_probs(player_view)
         minion_names = [
@@ -119,8 +119,10 @@ class EvilPlayerController(PlayerController):
         else:
             lowest_minion_imp = 0
 
-        if self_imp_prob > 50 and lowest_minion_imp < 20:
+        if self_imp_prob > 50 and self_imp_prob - lowest_minion_imp > 25:
             return self.player
+        
+        targets = [p for p in candidates if p.seat in alive_seats and p != self.player and p not in minions]
 
         info_roles = {
             "Washerwoman",
@@ -132,7 +134,6 @@ class EvilPlayerController(PlayerController):
             "Undertaker",
             "Ravenkeeper",
         }
-        targets = [p for p in candidates if p.alive and p != self.player and not p in minions]
         best = None
         best_score = float("inf")
         for t in targets:

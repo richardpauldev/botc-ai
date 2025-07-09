@@ -137,7 +137,7 @@ class GoodPlayerController(PlayerController):
         ranked = sorted(others, key=lambda p: evil_prob[p.name], reverse=True)
         target = ranked[0]
 
-        if target
+        return target
 
     def cast_vote(self, nominee: Player, player_view: PlayerView) -> bool:
         """Decide whether to vote for a nominee.

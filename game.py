@@ -536,8 +536,11 @@ class Game:
                         continue
                     player.controller.send_info(target, info)
 
+    def is_player_alive(self, player: Player) -> bool:
+        return player.alive and player.seat not in self.state.pending_deaths
+
     def get_alive_players(self):
-        return [p for p in self.players if p.alive]
+        return [p for p in self.players if self.is_player_alive(p)]
 
     def night_phase(self):
         """
@@ -1227,7 +1230,7 @@ class DumbStorytellerAI(StorytellerAI):
         if self.is_drunk_or_poisoned(demon, game):
             return
 
-        if not target.alive:
+        if not game.is_player_alive(target):
             return
 
         mayor_bounce = [
@@ -1397,7 +1400,7 @@ class Empath(Role):
         self.storyteller_ai = storyteller_ai
 
     def night_action(self, player, game):
-        alive_players = [p for p in game.players if p.alive]
+        alive_players = [p for p in game.players if game.is_player_alive(p)]
         left: Player | None = None
         right: Player | None = None
         if len(alive_players) < 3:
@@ -1564,11 +1567,13 @@ class Drunk(Role):
         if self.cover_role is None:
             self.assign_cover_role(game)
         # Call cover role's night_action, but StorytellerAI should always treat them as drunk
+        assert self.cover_role is not None
         self.cover_role.night_action(player, game)
 
     def day_action(self, player, game):
         if self.cover_role is None:
             self.assign_cover_role(game)
+        assert self.cover_role is not None
         self.cover_role.day_action(player, game)
 
 
