@@ -132,7 +132,7 @@ class EvilPlayerController(PlayerController):
             "Undertaker",
             "Ravenkeeper",
         }
-        targets = [p for p in candidates if p.alive and p != self.player]
+        targets = [p for p in candidates if p.alive and p != self.player and not p in minions]
         best = None
         best_score = float("inf")
         for t in targets:
