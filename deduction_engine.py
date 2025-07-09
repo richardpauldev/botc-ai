@@ -65,6 +65,48 @@ class WorldState:
 
 ONGOING_INFO_ROLES = {"Empath", "Fortune Teller", "Undertaker", "Ravenkeeper", "Virgin", "Slayer"}
 
+# Helper functions ---------------------------------------------------------
+
+def _could_be_role(world: WorldState, player: str, role: str) -> bool:
+    """Return True if ``player`` could have ``role`` in ``world``."""
+    r = world.roles.get(player)
+    if r == role:
+        return True
+    if r == "Good":
+        return role in world.good_role_options.get(player, [])
+    return False
+
+
+def _must_be_role(world: WorldState, player: str, role: str) -> bool:
+    """Return True if ``player`` must have ``role`` in ``world``."""
+    r = world.roles.get(player)
+    if r == role:
+        return True
+    if r == "Good":
+        opts = world.good_role_options.get(player, [])
+        return opts and all(o == role for o in opts)
+    return False
+
+
+def _could_be_in(world: WorldState, player: str, roles: List[str]) -> bool:
+    r = world.roles.get(player)
+    if r in roles:
+        return True
+    if r == "Good":
+        opts = world.good_role_options.get(player, [])
+        return any(o in roles for o in opts)
+    return False
+
+
+def _must_be_in(world: WorldState, player: str, roles: List[str]) -> bool:
+    r = world.roles.get(player)
+    if r in roles:
+        return True
+    if r == "Good":
+        opts = world.good_role_options.get(player, [])
+        return opts and all(o in roles for o in opts)
+    return False
+
 def generate_all_worlds(
     player_names, all_minion_roles, m_minions, claims, TB_ROLES, outsider_count, deaths=None, pov_player=None
 ):
@@ -183,9 +225,11 @@ def _trustworthy_claims(world: WorldState, claim_type: str) -> List[dict]:
     result = []
     # print("asdiljfk", world.claims, world.roles, claim_type)
     for player, role in world.roles.items():
-        if role.lower() == claim_type:
-            info = world.claims.get(player)
-            if info and info.get("type") == claim_type:
+        if role.lower() == claim_type or (
+            role == "Good" and claim_type in [r.lower() for r in world.good_role_options.get(player, [])]
+        ):
+            info = world.claims.get(player, {"claimer": player, "type": claim_type})
+            if info.get("type") == claim_type:
                 result.append(info)
     return result
 
@@ -248,11 +292,17 @@ def _branch_red_herring(world: WorldState, night: int, TB_ROLES) -> List[WorldSt
                 continue
             players = [entry.get("player1"), entry.get("player2")]
             ping = bool(entry.get("ping"))
-            demon_seen = any(world.roles.get(p) in ["Imp", "Recluse"] for p in players)
+            demon_seen = any(
+                _could_be_role(world, p, "Imp") or _could_be_role(world, p, "Recluse")
+                for p in players
+            )
             if ping and not demon_seen:
                 for cand in players:
-                    role = world.roles.get(cand)
-                    if role in TB_ROLES.get("Townsfolk", []) + TB_ROLES.get("Outsider", []):
+                    if _could_be_in(
+                        world,
+                        cand,
+                        TB_ROLES.get("Townsfolk", []) + TB_ROLES.get("Outsider", []),
+                    ):
                         candidates.add(cand)
     result = []
     for cand in candidates:
@@ -351,7 +401,7 @@ def _apply_imp_death(world: WorldState, night: int, TB_ROLES) -> List[WorldState
         if d.get("night") != night:
             continue
         player = d.get("player")
-        if not player or world.roles.get(player) != "Imp":
+        if not player or not _must_be_role(world, player, "Imp"):
             continue
         time = d.get("time", "night")
         next_worlds = []
@@ -371,7 +421,7 @@ def process_soldier(world: WorldState, night: int, TB_ROLES) -> bool:
     for d in world.deaths:
         if d.get("night") == night and d.get("time", "night") == "night":
             player = d.get("player")
-            if player and world.roles.get(player) == "Soldier":
+            if player and _could_be_role(world, player, "Soldier"):
                 return True
     return False
 
@@ -385,8 +435,8 @@ def process_washerwoman(world: WorldState, night: int, TB_ROLES) -> bool:
         role = info.get("seen_role")
         if players and role:
             a, b = players
-            if world.roles.get(a) != role and world.roles.get(b) != role:
-                if world.roles.get(a) == "Spy" or world.roles.get(b) == "Spy":
+            if not _could_be_role(world, a, role) and not _could_be_role(world, b, role):
+                if _could_be_role(world, a, "Spy") or _could_be_role(world, b, "Spy"):
                     return True
                 return False
     return True
@@ -399,11 +449,11 @@ def process_librarian(world: WorldState, night: int, TB_ROLES) -> bool:
         players = info.get("seen_players", [])
         role = info.get("seen_role")
         if role is None:
-            if any(world.roles.get(p) in TB_ROLES.get("Outsider", []) for p in world.roles):
+            if any(_must_be_in(world, p, TB_ROLES.get("Outsider", [])) for p in world.roles):
                 return False
         else:
-            if not any(world.roles.get(p) == role for p in players):
-                if any(world.roles.get(p) == "Spy" for p in players):
+            if not any(_could_be_role(world, p, role) for p in players):
+                if any(_could_be_role(world, p, "Spy") for p in players):
                     return True
                 return False
     return True
@@ -415,7 +465,10 @@ def process_investigator(world: WorldState, night: int, TB_ROLES) -> bool:
     for info in _trustworthy_claims(world, "investigator"):
         players = info.get("seen_players", [])
         role = info.get("seen_role")
-        if not any(world.roles.get(p) == role or world.roles.get(p) == "Recluse" for p in players):
+        if not any(
+            _could_be_role(world, p, role) or _could_be_role(world, p, "Recluse")
+            for p in players
+        ):
             return False
     return True
 
@@ -426,7 +479,7 @@ def process_undertaker(world: WorldState, night: int, TB_ROLES) -> bool:
             if entry.get("night") == night:
                 executed = entry.get("executed_player")
                 seen_role = entry.get("seen_role")
-                if world.roles.get(executed) != seen_role and not world.roles.get(executed) == "Spy":
+                if not _could_be_role(world, executed, seen_role) and not _could_be_role(world, executed, "Spy"):
                     return False
     return True
 
@@ -438,9 +491,8 @@ def process_ravenkeeper(world: WorldState, night: int, TB_ROLES) -> bool:
         if info.get("night") == night:
             player = info.get("seen_player")
             if player:
-                role = world.roles.get(player)
                 seen_role = info.get("seen_role")
-                if role != seen_role and role != "Spy":
+                if not _could_be_role(world, player, seen_role) and not _could_be_role(world, player, "Spy"):
                     return False
             
     return True
@@ -452,15 +504,16 @@ def process_slayer(world: WorldState, night: int, TB_ROLES) -> bool:
             shot = info.get("shot_player")
             died = info.get("died")
             claimer = info.get("claimer")
-            is_imp = shot is not None and world.roles.get(shot) in ["Imp", "Recluse"]
+            is_imp = shot is not None and (
+                _could_be_role(world, shot, "Imp") or _could_be_role(world, shot, "Recluse")
+            )
             if died and not is_imp:
                 return False
             if not died and is_imp:
                 return False
             if died and claimer:
-                r = world.roles.get(claimer)
                 evil = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
-                if r in evil or r == "Drunk":
+                if _must_be_in(world, claimer, list(evil)) or _must_be_role(world, claimer, "Drunk"):
                     return False
     return True
 
@@ -473,10 +526,9 @@ def process_virgin(world: WorldState, night: int, TB_ROLES) -> bool:
             died = info.get("died")
             claimer = info.get("claimer")
             if nom:
-                nom_role = world.roles.get(nom)
-                if died and nom_role not in townsfolk and nom_role != "Spy":
+                if died and not _could_be_in(world, nom, list(townsfolk)) and not _could_be_role(world, nom, "Spy"):
                     return False
-                if not died and nom_role in townsfolk:
+                if not died and _could_be_in(world, nom, list(townsfolk)):
                     return False
     return True 
 
@@ -487,8 +539,8 @@ def process_empath(world: WorldState, night: int, TB_ROLES) -> bool:
         for entry in info.get("night_results", []):
             if entry.get("night") == night:
                 neighbors = [entry.get("neighbor1"), entry.get("neighbor2")]
-                count = sum(1 for p in neighbors if world.roles.get(p) in evil)
-                spy_nieghbor = any(True for p in neighbors if world.roles.get(p) == "Spy")
+                count = sum(1 for p in neighbors if _could_be_in(world, p, list(evil)))
+                spy_nieghbor = any(_could_be_role(world, p, "Spy") for p in neighbors)
                 if spy_nieghbor:
                     if count != entry.get("num_evil") - 1 or count != entry.get("num_evil"):
                         return False
@@ -502,7 +554,10 @@ def process_fortune_teller(world: WorldState, night: int, TB_ROLES) -> bool:
         for entry in info.get("night_results", []):
             if entry.get("night") == night:
                 players = [entry.get("player1"), entry.get("player2")]
-                demon_seen = any(world.roles.get(p) == "Imp" or world.roles.get(p) == "Recluse" for p in players)
+                demon_seen = any(
+                    _could_be_role(world, p, "Imp") or _could_be_role(world, p, "Recluse")
+                    for p in players
+                )
                 if world.red_herring and world.red_herring in players:
                     demon_seen = True
                 if bool(entry.get("ping")) != demon_seen:
