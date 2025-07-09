@@ -272,7 +272,7 @@ class GoodPlayerController(PlayerController):
 
             self.player.claim = claim
             self._last_public = claim
-            return {"from": self.player.name, "public_claim": self.player.claim}
+            return {"public_claim": self.player.claim}
         info = {
             k: v
             for k, v in self.player.memory.items()
@@ -280,6 +280,6 @@ class GoodPlayerController(PlayerController):
         }
         if info and info != self._last_public:
             self._last_public = info
-            return {"from": self.player.name, "public": info}
+            return {"public": info}
         return None
 

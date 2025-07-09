@@ -217,4 +217,4 @@ class EvilPlayerController(PlayerController):
         if info:
             self.player.claim.update(info)
         self.has_claimed = True
-        return {"from": self.player.name, "public_claim": self.player.claim}
+        return {"public_claim": self.player.claim}
