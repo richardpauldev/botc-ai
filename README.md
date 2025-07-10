@@ -31,17 +31,21 @@ This project is an experimental AI designed to:
 git clone https://github.com/richardpauldev/botc-ai.git
 cd botc-ai
 ```
-2. Run the main script:
+2. Try out the deduction engine example:
+```bash
+python deduction_engine.py
 ```
-like_version_4.py
+3. Launch a quick game simulation:
+```bash
+python game.py
 ```
-*(See in-code comments for options and configuration.)*
+*(See in-code comments for configuration options.)*
 
 ## Technologies Used
 
-
 - Python 3
-- Standard libraries (random, itertools, etc)
+- No external dependencies
+- Standard library modules like `dataclasses`, `enum`, `itertools` and `random`
 
 ## Why did I build this?
 
