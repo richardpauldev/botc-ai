@@ -147,9 +147,13 @@ class GoodPlayerController(PlayerController):
         the nominee is more likely evil.
         """
         evil_prob, imp_prob = self._evil_imp_probs(player_view)
-        final_three = len(player_view.alive_players) <= 3
+        num_alive = len(player_view.alive_players)
+        final_three = num_alive <= 3
 
-        # Dead players can only vote in the final three
+        if num_alive == 4: # Don't vote on final 4
+            return False
+
+        # Dead players will only vote in the final three
         if not self.player.alive and not final_three:
             return False
 
@@ -157,7 +161,7 @@ class GoodPlayerController(PlayerController):
         leader = None
         leader_votes = -1
         for n_name, voters in player_view.votes.items():
-            if len(voters) > leader_votes:
+            if len(voters) > leader_votes and len(voters) >= num_alive / 2:
                 leader_votes = len(voters)
                 leader = n_name
 
@@ -165,13 +169,12 @@ class GoodPlayerController(PlayerController):
         nominee_score = evil_prob[nominee.name]
 
         if final_three:
-            # During the final three, players are more decisive. They will vote
-            # for the nominee only if they appear more evil than whoever is
-            # currently leading the vote count.
+            # TODO: Change so that it instead votes only for the person in the final three with the highest Imp chance
             if leader and leader != nominee.name and leader_score >= nominee_score:
                 return False
             chance = nominee_score / 100.0
             return random.random() < max(chance, 0.4)
+            
 
         # Outside final three -------------------------------------------------
         if leader and leader != nominee.name and leader_score >= nominee_score:
@@ -179,9 +182,13 @@ class GoodPlayerController(PlayerController):
             return False
 
         # Weight vote probability by how suspicious the nominee is
-        chance = (nominee_score - leader_score) / 50.0
+        chance = (nominee_score / leader_score) / 50.0
+        if num_alive % 2 == 0:
+            chance *= 2
+        else:
+            chance /= 2
         # Small baseline so highly suspected players are voted more often
-        return random.random() < max(chance, .5)
+        return random.random() < max(chance, .3)
 
     # Night actions --------------------------------------------------------
     def choose_fortune_teller_targets(self, candidates, player_view):

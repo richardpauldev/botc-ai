@@ -329,8 +329,7 @@ class HumanPlayerController(PlayerController):
         return resp.strip().lower() == "y"
 
     def share_info(self, player_view: PlayerView, context=None):
-        print(format_player_view(player_view))
-        if self.player.role in TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK] + TROUBLE_BREWING_ROLES[Alignment.OUTSIDER]:
+        if self.player.role.name in (TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK] + TROUBLE_BREWING_ROLES[Alignment.OUTSIDER]):
             if self.player.claim is None:
                 claim = {"role": player_view.role_name}
                 if "night_results" in player_view.memory:
@@ -747,6 +746,7 @@ class Game:
             len(alive) == 3
             and any(p.role.name == "Mayor" for p in alive)
             and self.state.phase == Phase.NIGHT
+            and self.state.executed_today == None
         ):
             return "Good Wins!"
         if not demon_alive:
