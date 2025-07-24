@@ -17,6 +17,7 @@ This project is an experimental AI designed to:
 - Probabilistic reasoning and deduction engine.
 - Basic game simulation and storyteller AI logic.
 - Player nomination/voting and star-passing mechanics.
+- Coordinated bluffing system for evil players with public confirmations.
 
 ## Limitations & To-Do
 - File structure is under heavy development; expect refactoring soon.
