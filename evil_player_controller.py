@@ -12,6 +12,7 @@ from game import (
     TROUBLE_BREWING_ROLES,
     player_role_counts,
 )
+from role_data import INFO_ROLES
 
 
 class EvilPlayerController(PlayerController):
@@ -81,16 +82,7 @@ class EvilPlayerController(PlayerController):
         if not goods:
             goods = [p for p in candidates if p != self.player]
 
-        info_roles = {
-            "Washerwoman",
-            "Librarian",
-            "Investigator",
-            "Chef",
-            "Empath",
-            "Fortune Teller",
-            "Undertaker",
-            "Ravenkeeper",
-        }
+        info_roles = INFO_ROLES
         if player_view.night == 1:
             return random.choice(goods) if goods else None
         info_claimers = [
@@ -124,16 +116,7 @@ class EvilPlayerController(PlayerController):
         
         targets = [p for p in candidates if p.seat in alive_seats and p != self.player and p not in minions]
 
-        info_roles = {
-            "Washerwoman",
-            "Librarian",
-            "Investigator",
-            "Chef",
-            "Empath",
-            "Fortune Teller",
-            "Undertaker",
-            "Ravenkeeper",
-        }
+        info_roles = INFO_ROLES
         best = None
         best_score = float("inf")
         for t in targets:
@@ -162,16 +145,7 @@ class EvilPlayerController(PlayerController):
         assigned = self.player.memory.get("assigned_bluff")
         if assigned:
             return assigned
-        info_roles = {
-            "Washerwoman",
-            "Librarian",
-            "Investigator",
-            "Chef",
-            "Empath",
-            "Fortune Teller",
-            "Undertaker",
-            "Ravenkeeper",
-        }
+        info_roles = INFO_ROLES
         if self.player.role.alignment == Alignment.MINION:
             info_avail = [b for b in available if b in info_roles]
             if info_avail:

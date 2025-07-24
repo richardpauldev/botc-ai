@@ -3,54 +3,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 from copy import deepcopy
 
-def construct_info_claim_dict(player: str, claim: dict) -> Optional[dict]:
-    """Construct a simplified info-claim dictionary from a raw claim."""
-    role = claim.get("role")
-    if not role:
-        return None
-
-    role_fields = {
-        "Washerwoman": ["seen_role", "seen_players"],
-        "Librarian": ["seen_role", "seen_players"],
-        "Investigator": ["seen_role", "seen_players"],
-        "Undertaker": ["night_results"],
-        "Ravenkeeper": ["seen_player", "seen_role", "night"],
-        "Slayer": ["night", "shot_player", "died"],
-        "Virgin": ["night", "first_nominator", "died"],
-        "Empath": ["night_results"],
-        "Fortune Teller": ["night_results"],
-        "Chef": ["pairs"],
-    }
-
-    fields = role_fields.get(role)
-    if not fields:
-        return None
-
-    info = {"type": role.lower(), "claimer": player}
-
-    nr_subfields = {
-        "undertaker": ["night", "executed_player", "seen_role"],
-        "empath": ["night", "num_evil", "neighbor1", "neighbor2"],
-        "fortune teller": ["night", "ping", "player1", "player2"],
-    }
-
-    for f in fields:
-        value = claim.get(f)
-        if f == "night_results":
-            if isinstance(value, list):
-                subfields = nr_subfields.get(role.lower())
-                if subfields:
-                    info[f] = [
-                        {k: entry.get(k) for k in subfields}
-                        for entry in value
-                    ]
-                else:
-                    info[f] = value
-            else:
-                info[f] = []
-        else:
-            info[f] = value
-    return info
+from role_data import construct_info_claim_dict, ONGOING_INFO_ROLES
 
 @dataclass(slots=True)
 class WorldState:
@@ -63,7 +16,7 @@ class WorldState:
     good_role_options: Dict[str, List[str]] = field(default_factory=dict)
     red_herring: Optional[str] = None
 
-ONGOING_INFO_ROLES = {"Empath", "Fortune Teller", "Undertaker", "Ravenkeeper", "Virgin", "Slayer"}
+
 
 # Helper functions ---------------------------------------------------------
 

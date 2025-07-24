@@ -11,6 +11,7 @@ from deduction_engine import (
     deduction_pipeline,
     compute_role_probs,
 )
+from role_data import INFO_ROLES
 from game import (
     PlayerController,
     Player,
@@ -216,12 +217,7 @@ class GoodPlayerController(PlayerController):
     def choose_monk_protect(self, candidates, player_view):
 
         evil_prob, _ = self._evil_imp_probs(player_view)
-        info_roles = {
-            "Empath",
-            "Fortune Teller",
-            "Undertaker",
-            "Ravenkeeper",
-        }
+        info_roles = INFO_ROLES
         best = None
         best_score = -1.0
         for p in candidates:
