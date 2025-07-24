@@ -182,7 +182,10 @@ class GoodPlayerController(PlayerController):
             return False
 
         # Weight vote probability by how suspicious the nominee is
-        chance = (nominee_score / leader_score) / 50.0
+        if leader_score == 0:
+            chance = 1
+        else:
+            chance = (nominee_score / leader_score) / 50.0
         if num_alive % 2 == 0:
             chance *= 2
         else:

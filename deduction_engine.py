@@ -52,7 +52,7 @@ def construct_info_claim_dict(player: str, claim: dict) -> Optional[dict]:
             info[f] = value
     return info
 
-@dataclass
+@dataclass(slots=True)
 class WorldState:
     """Representation of a possible game world."""
 
@@ -117,6 +117,16 @@ def generate_all_worlds(
     if deaths is None:
         deaths = []
 
+    parsed_claims = {
+        p1: info
+        for p1, c in claims.items()
+        if (info := construct_info_claim_dict(p1, c))
+    }
+
+    good_role_options_cache = {
+        p1: c["roles"] for p1, c in claims.items() if "roles" in c
+    }
+
     for minion_role_combo in itertools.combinations(all_minion_roles, m_minions):
         minion_role_combo_set = set(minion_role_combo)
         for minion_players in itertools.combinations(players, m_minions):
@@ -155,27 +165,17 @@ def generate_all_worlds(
                                         roles[p] = role
                                     else:
                                         roles[p] = "Good"
-                            parsed_claims = {}
-                            for pl, c in claims.items():
-                                info = construct_info_claim_dict(pl, c)
-                                if info:
-                                    parsed_claims[pl] = info
                             worlds.append(
                                 WorldState(
                                     roles=roles,
                                     claims=parsed_claims,
-                                    good_role_options={
-                                        pl: c["roles"]
-                                        for pl, c in claims.items()
-                                        if "roles" in c
-                                    },
+                                    good_role_options=good_role_options_cache,
                                     deaths=list(deaths)
                                 )
                             )
                     else:
                         # Outsider count doesn't match: must "remove" a trustworthy to allow Drunk as evil
                         for drunk_player in trustworthy:
-                            reduced_trustworthy = [p for p in trustworthy if p != drunk_player]
                             # Only assign Drunk to someone who is not already claiming outsider
                             if claims.get(drunk_player, {}).get("role") in TB_ROLES["Outsider"]:
                                 continue
@@ -195,20 +195,11 @@ def generate_all_worlds(
                                         roles[p] = "Good"
                                 
                             if len(roles) == n:
-                                parsed_claims = {}
-                                for pl, c in claims.items():
-                                    info = construct_info_claim_dict(pl, c)
-                                    if info:
-                                        parsed_claims[pl] = info
                                 worlds.append(
                                     WorldState(
                                         roles=roles,
                                         claims=parsed_claims,
-                                        good_role_options={
-                                            pl: c["roles"]
-                                            for pl, c in claims.items()
-                                            if "roles" in c
-                                        },
+                                        good_role_options=good_role_options_cache,
                                         deaths=list(deaths)
                                     )
                                 )
@@ -681,29 +672,26 @@ def get_untrustworthy_correlation(worlds, all_players, TB_ROLES):
 def compute_role_probs(worlds, all_players, TB_ROLES):
     """Return probability each player is evil or specifically the Imp."""
     evil_roles = set(TB_ROLES.get("Minion", []) + TB_ROLES.get("Demon", []))
-    evil_probs = {p: 0.0 for p in all_players}
-    imp_probs = {p: 0.0 for p in all_players}
+    evil_sums = {p: 0.0 for p in all_players}
+    imp_sums = {p: 0.0 for p in all_players}
+    total = 0.0
 
-    weights = []
     for w in worlds:
-        weights.append(_world_weight(w, TB_ROLES))
-    
-    total = sum(weights)
-
-    if total == 0:
-        return evil_probs, imp_probs
-
-    for w, weight in zip(worlds, weights):
+        weight = _world_weight(w, TB_ROLES)
+        if weight == 0:
+            continue
+        total += weight
         for p in all_players:
             role = w.roles.get(p)
             if role in evil_roles:
-                evil_probs[p] += weight
+                evil_sums[p] += weight
             if role == "Imp":
-                imp_probs[p] += weight
-
-    for p in all_players:
-        evil_probs[p] = evil_probs[p] / total * 100
-        imp_probs[p] = imp_probs[p] / total * 100
+                imp_sums[p] += weight
+    
+    if total == 0:
+        return {p: 0.0 for p in all_players}, {p: 0.0 for p in all_players}
+    evil_probs = {p: evil_sums[p] / total * 100 for p in all_players}
+    imp_probs = {p: imp_sums[p] / total * 100 for p in all_players}
 
     return evil_probs, imp_probs
 

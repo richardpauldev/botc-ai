@@ -758,26 +758,41 @@ class Game:
             return "Evil wins!"
         return None
 
-    def run(self):
+    def run(self, verbose: bool = True) -> str | None:
         """
-        Main game loop
+        Main game loop. If ``verbose`` is False, suppress output and skip the
+        deduction step. Returns the winning team string (e.g. "Good wins!") or
+        ``None`` if the game ended without a clear winner.
         """
-        while self.state.phase != Phase.GAME_OVER:
-            if self.state.phase == Phase.NIGHT:
-                self.night_phase()
-            elif self.state.phase == Phase.DAY:
-                self.day_phase()
-            result = self.check_win_conditions()
-            if result or self.state.phase == Phase.GAME_OVER or self.state.night > 10:
-                print(result)
-                break
+        result = None
+        if not verbose: #Stop all printing
+            saved_print = globals().get("__builtin_print")
+            globals()["__builtin_print"] = lambda *a, **k: None
+        else:
+            saved_print = None
+        try:
+            while self.state.phase != Phase.GAME_OVER:
+                if self.state.phase == Phase.NIGHT:
+                    self.night_phase()
+                elif self.state.phase == Phase.DAY:
+                    self.day_phase()
+                result = self.check_win_conditions()
+                if result or self.state.phase == Phase.GAME_OVER or self.state.night > 10:
+                    if verbose:
+                        print(result)
+                    break
+        finally:
+            if not verbose:
+                globals()["__builtin_print"] = saved_print  # type: ignore
 
-        # At end of game, after run loop
-        print("\nGame over! Final state:")
-        for p in self.players:
-            print(p)
-        # After the game ends, run deduction analysis on the final game state
-        self.run_deduction()
+        if verbose:
+            print("\nGame over! Final state:")
+            for p in self.players:
+                print(p)
+            # After the game ends, run deduction analysis on the final game state
+            self.run_deduction()
+
+        return result
 
     def resolve_scarlet_woman(self, killed_player):
         if killed_player.role.name != "Imp":
@@ -1436,7 +1451,7 @@ class Empath(Role):
         self.storyteller_ai = storyteller_ai
 
     def night_action(self, player, game):
-        alive_players = [p for p in game.players if game.is_player_alive(p)]
+        alive_players = [p for p in game.players if p.alive]
         left: Player | None = None
         right: Player | None = None
         if len(alive_players) < 3:

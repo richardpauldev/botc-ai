@@ -187,7 +187,7 @@ class EvilPlayerController(PlayerController):
             players = random.sample(others, 2)
             return {"seen_role": seen_role, "seen_players": players}
         if bluff_role == "Librarian":
-            seen_role = "Drunk"
+            seen_role = "Drunk" # We just always see drunk, helps spread doubt
             players = random.sample(others, 2)
             return {"seen_role": seen_role, "seen_players": players}
         if bluff_role == "Washerwoman":
