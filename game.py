@@ -537,13 +537,26 @@ class Game:
         # Choose 3 bluffs randomly
         bluffs = random.sample(bluff_pool, k=3) if len(bluff_pool) >= 3 else bluff_pool
         if demon:
-            demon.memory["bluffs"] = bluffs    
+            demon.memory["bluffs"] = bluffs
             self.state.demon_bluffs = bluffs
             for p in evil_team:
                 if p is demon:
                     continue
                 p.memory["bluffs"] = bluffs
-                demon.controller.send_info(p, {"bluffs": bluffs})        
+                demon.controller.send_info(p, {"bluffs": bluffs})
+
+            # Assign a specific bluff to each evil player so they can coordinate
+            assignments = {}
+            available = bluffs[:] if bluffs else []
+            random.shuffle(available)
+            for idx, p in enumerate(evil_team):
+                chosen = available[idx % len(available)] if available else None
+                assignments[p.name] = chosen
+                p.memory["assigned_bluff"] = chosen
+            for p in evil_team:
+                p.memory["bluff_plan"] = assignments
+                if p is not demon:
+                    demon.controller.send_info(p, {"bluff_plan": assignments, "assigned_bluff": assignments[p.name]})
 
         # --- 2. Share Evil Team Info with All Evil Players ---
         evil_team_info = [
