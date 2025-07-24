@@ -1,10 +1,21 @@
 import argparse
 from collections import defaultdict
+from math import sqrt
 
 from game import Game, random_trouble_brewing_setup, DumbStorytellerAI, Alignment
 from good_player_controller import GoodPlayerController
 from evil_player_controller import EvilPlayerController
 
+def proportion_confidence_interval(wins, total, z=1.645):
+    """Returns (center, lower_bound, upper_bound) for a proportion ±0.90 CI.
+    z=1.645 is the critical value for 90% confidence."""
+    if total == 0:
+        return 0, 0, 0
+    p = wins / total
+    se = sqrt(p * (1 - p) / total)
+    lower = max(0, p - z * se)
+    upper = min(1, p + z * se)
+    return p, lower, upper
 
 def simulate_games(num_games: int, player_count: int = 8) -> None:
     team_results = {"Good": 0, "Evil": 0}
@@ -42,10 +53,19 @@ def simulate_games(num_games: int, player_count: int = 8) -> None:
     for team, wins in team_results.items():
         print(f"{team}: {wins / num_games:.2%} ({wins}/{num_games})")
 
-    print("\nRole win rates:")
-    for role, (wins, total) in sorted(role_results.items()):
-        print(f"{role}: {wins / total:.2%} ({wins}/{total})")
+    print("\nRole win rates (sorted):")
+    # Prepare list with winrate and CI for sorting/printing
+    stats = []
+    for role, (wins, total) in role_results.items():
+        winrate, lower, upper = proportion_confidence_interval(wins, total)
+        stats.append((winrate, role, wins, total, lower, upper))
 
+    # Sort by winrate descending
+    stats.sort(reverse=True)
+
+    print(f"{'Role':<20}{'Winrate':>12}{'90% CI':>20} {'Record':>12}")
+    for winrate, role, wins, total, lower, upper in stats:
+        print(f"{role:<20}{winrate:>10.2%}   [{lower:.2%}, {upper:.2%}]   {wins}/{total}")
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Simulate multiple BOTC games")
@@ -55,7 +75,6 @@ def main() -> None:
     )
     args = parser.parse_args()
     simulate_games(args.num_games, args.players)
-
 
 if __name__ == "__main__":
     main()
