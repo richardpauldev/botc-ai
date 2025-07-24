@@ -589,6 +589,8 @@ class Game:
         
         self.state.monk_protected = None
         for player in self.get_alive_players():
+            if not self.is_player_alive(player):
+                continue
             player.role.night_action(player, self)
             print(
                 f"Night summary for {player.name} ({player.role.name}): {pformat(player.memory)}"
@@ -796,6 +798,9 @@ class Game:
 
     def resolve_scarlet_woman(self, killed_player):
         if killed_player.role.name != "Imp":
+            return
+        alive_before = len(self.get_alive_players()) + 1
+        if alive_before < 5:
             return
         for p in self.get_alive_players():
             if isinstance(p.role, ScarletWoman):
@@ -1451,7 +1456,7 @@ class Empath(Role):
         self.storyteller_ai = storyteller_ai
 
     def night_action(self, player, game):
-        alive_players = [p for p in game.players if p.alive]
+        alive_players = [p for p in game.players if game.is_player_alive(player)]
         left: Player | None = None
         right: Player | None = None
         if len(alive_players) < 3:
