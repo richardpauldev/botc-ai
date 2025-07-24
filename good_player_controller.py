@@ -169,11 +169,11 @@ class GoodPlayerController(PlayerController):
         nominee_score = evil_prob[nominee.name]
 
         if final_three:
-            # TODO: Change so that it instead votes only for the person in the final three with the highest Imp chance
-            if leader and leader != nominee.name and leader_score >= nominee_score:
+            alive_names = [player_view.seat_names[s] for s in player_view.alive_players]
+            best_demon = max(alive_names, key=lambda n: imp_prob.get(n, 0)) if alive_names else None
+            if nominee.name != best_demon:
                 return False
-            chance = nominee_score / 100.0
-            return random.random() < max(chance, 0.4)
+            return True
             
 
         # Outside final three -------------------------------------------------
