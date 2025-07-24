@@ -16,7 +16,7 @@ This project is an experimental AI designed to:
 - Role logic for key BOTC characters (Fortune Teller, Undertaker, Poisoner, etc).
 - Probabilistic reasoning and deduction engine.
 - Basic game simulation and storyteller AI logic.
-- (WIP) Player nomination/voting and star-passing mechanics.
+- Player nomination/voting and star-passing mechanics.
 - Coordinated bluffing system for evil players with public confirmations.
 
 ## Limitations & To-Do
