@@ -159,6 +159,9 @@ class EvilPlayerController(PlayerController):
         available = [b for b in bluffs if b not in claimed]
         if not available:
             available = bluffs
+        assigned = self.player.memory.get("assigned_bluff")
+        if assigned:
+            return assigned
         info_roles = {
             "Washerwoman",
             "Librarian",
@@ -177,22 +180,40 @@ class EvilPlayerController(PlayerController):
 
     def _fake_info(self, bluff_role, player_view):
         demon_name = None
+        team = [info["name"] for info in self.player.memory.get("evil_team", [])]
         for info in self.player.memory.get("evil_team", []):
             if info["alignment"] == Alignment.DEMON:
                 demon_name = info["name"]
                 break
-        others = [name for seat, name in player_view.seat_names.items() if name != demon_name]
+        others = [name for seat, name in player_view.seat_names.items() if name != self.player.name]
+        assignments = self.player.memory.get("bluff_plan", {})
         if bluff_role == "Investigator":
             seen_role = random.choice(TROUBLE_BREWING_ROLES[Alignment.MINION])
             players = random.sample(others, 2)
             return {"seen_role": seen_role, "seen_players": players}
         if bluff_role == "Librarian":
-            seen_role = "Drunk" # We just always see drunk, helps spread doubt
-            players = random.sample(others, 2)
-            return {"seen_role": seen_role, "seen_players": players}
+            buddy_opts = [n for n in team if n != self.player.name]
+            if buddy_opts:
+                buddy = random.choice(buddy_opts)
+                other = random.choice([n for n in others if n != buddy])
+                role = assignments.get(buddy, "Drunk")
+                if role not in TROUBLE_BREWING_ROLES[Alignment.OUTSIDER]:
+                    role = "Drunk"
+                players = [buddy, other]
+            else:
+                role = "Drunk"
+                players = random.sample(others, 2)
+            return {"seen_role": role, "seen_players": players}
         if bluff_role == "Washerwoman":
-            role = random.choice(TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK])
-            players = random.sample(others, 2)
+            buddy_opts = [n for n in team if n != self.player.name]
+            if buddy_opts:
+                buddy = random.choice(buddy_opts)
+                other = random.choice([n for n in others if n != buddy])
+                role = assignments.get(buddy, random.choice(TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK]))
+                players = [buddy, other]
+            else:
+                role = random.choice(TROUBLE_BREWING_ROLES[Alignment.TOWNSFOLK])
+                players = random.sample(others, 2)
             return {"seen_role": role, "seen_players": players}
         if bluff_role == "Chef":
             return {"pairs": 0}
@@ -218,7 +239,14 @@ class EvilPlayerController(PlayerController):
                 ]
             }        
         if bluff_role == "Fortune Teller":
-            return {"night_results": [{"night": 1, "player1": others[0], "player2": others[1], "ping": False}]}
+            buddy_opts = [n for n in team if n != self.player.name]
+            if buddy_opts:
+                buddy = random.choice(buddy_opts)
+                other = random.choice([n for n in others if n != buddy])
+                players = [buddy, other]
+            else:
+                players = others[:2]
+            return {"night_results": [{"night": 1, "player1": players[0], "player2": players[1], "ping": False}]}
         if bluff_role == "Undertaker":
             return {"night_results": []}
         if bluff_role == "Ravenkeeper":
@@ -226,15 +254,30 @@ class EvilPlayerController(PlayerController):
         return {}
 
     def share_info(self, player_view: PlayerView, context=None):
-        if self.has_claimed:
-            return None
-        bluff = self._select_bluff(player_view)
-        if not bluff:
-            return None
-        self.chosen_bluff = bluff
-        self.player.claim = {"role": bluff}
-        info = self._fake_info(bluff, player_view)
-        if info:
-            self.player.claim.update(info)
-        self.has_claimed = True
-        return {"public_claim": self.player.claim}
+        msg = {}
+        if not self.has_claimed:
+            bluff = self._select_bluff(player_view)
+            if bluff:
+                self.chosen_bluff = bluff
+                self.player.claim = {"role": bluff}
+                info = self._fake_info(bluff, player_view)
+                if info:
+                    self.player.claim.update(info)
+                self.has_claimed = True
+                msg["public_claim"] = self.player.claim
+
+        plan = self.player.memory.get("bluff_plan", {})
+        confirmed = self.player.memory.setdefault("confirmed_teammates", [])
+        confirmations = []
+        for seat, name in player_view.seat_names.items():
+            if name == self.player.name:
+                continue
+            claim = player_view.public_claims.get(seat)
+            expected = plan.get(name)
+            if claim and expected and claim.get("role") == expected and name not in confirmed:
+                confirmations.append({"player": name, "role": expected})
+                confirmed.append(name)
+        if confirmations:
+            msg["confirm"] = confirmations
+
+        return msg if msg else None

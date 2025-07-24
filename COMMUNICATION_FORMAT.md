@@ -17,7 +17,19 @@ Two common message types are used:
   {"public": {"night_results": [{"night": 2, "player1": "Alice", "player2": "Bob", "ping": False}]}}
   ```
 
-Additional keys may be present for special messages (e.g. the Demon privately sending `{"bluffs": ["Chef", "Mayor", "Empath"]}` to its minions).
+Additional keys may be present for special messages. Common examples include:
+  - The Demon privately sending bluffs to minions:
+    ```python
+    {"bluffs": ["Chef", "Mayor", "Empath"]}
+    ```
+  - A full bluff plan mapping each evil player to a specific claim:
+    ```python
+    {"bluff_plan": {"Evil1": "Chef", "Evil2": "Slayer"}, "assigned_bluff": "Chef"}
+    ```
+  - Public confirmations of a teammate's claim:
+    ```python
+    {"confirm": [{"player": "Evil2", "role": "Slayer"}]}
+    ```
 
 Below is a summary of the information each role places in its own `memory` during play. These same structures appear in messages when that information is shared.
 
