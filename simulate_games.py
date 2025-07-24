@@ -28,6 +28,11 @@ def simulate_games(num_games: int, player_count: int = 8) -> None:
         roles = random_trouble_brewing_setup(player_count, ai)
 
         game = Game(player_names, roles)
+        # Keep track of each player's starting role so win rates are based on
+        # initial roles even if they change (e.g. Imp star-pass).
+        starting_roles = {
+            p.seat: (p.role.name, p.role.alignment) for p in game.players
+        }
         for p in game.players:
             if p.role.alignment in (Alignment.MINION, Alignment.DEMON):
                 p.controller = EvilPlayerController()
@@ -40,14 +45,15 @@ def simulate_games(num_games: int, player_count: int = 8) -> None:
         team_results[winning_team] += 1
 
         for p in game.players:
-            role_results[p.role.name][1] += 1
+            start_name, start_align = starting_roles[p.seat]
+            role_results[start_name][1] += 1
             player_team = (
                 "Good"
-                if p.role.alignment in (Alignment.TOWNSFOLK, Alignment.OUTSIDER)
+                if start_align in (Alignment.TOWNSFOLK, Alignment.OUTSIDER)
                 else "Evil"
             )
             if player_team == winning_team:
-                role_results[p.role.name][0] += 1
+                role_results[start_name][0] += 1
 
     print("Team win rates:")
     for team, wins in team_results.items():
