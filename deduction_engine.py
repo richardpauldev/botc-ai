@@ -614,6 +614,38 @@ ROLE_STEPS = [
     process_soldier
 ]
 
+def deduction_step(worlds, step_fn, night, TB_ROLES):
+    """Apply a single deduction step to ``worlds``.
+
+    Parameters
+    ----------
+    worlds : List[WorldState]
+        The input world states.
+    step_fn : Callable[[WorldState, int, dict], bool]
+        The processing function to apply (e.g. one from ``ROLE_STEPS``).
+    night : int
+        Night number to evaluate the step for.
+    TB_ROLES : dict
+        Trouble Brewing role dictionary used for branching logic.
+
+    Returns
+    -------
+    List[WorldState]
+        The new list of worlds produced by the step.
+    """
+
+    if not worlds:
+        return []
+
+    next_worlds = []
+    for w in worlds:
+        if step_fn(w, night, TB_ROLES):
+            next_worlds.append(w)
+        else:
+            if step_fn is process_fortune_teller:
+                next_worlds.extend(_branch_red_herring(w, night, TB_ROLES))
+            next_worlds.extend(_branch_poison(w, night))
+    return next_worlds    
 
 def deduction_pipeline(worlds, TB_ROLES):
     """Apply deduction role by role, night by night."""
