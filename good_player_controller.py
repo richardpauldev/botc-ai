@@ -127,7 +127,7 @@ class GoodPlayerController(PlayerController):
         overall nominations.
         """
         alive = self._alive_players(candidates, player_view)
-        evil_prob, _ = self._evil_imp_probs(player_view)
+        evil_prob, imp_prob = self._evil_imp_probs(player_view)
 
         others = [p for p in alive if p != self.player]
         if not others:
@@ -135,7 +135,10 @@ class GoodPlayerController(PlayerController):
 
         final_three = len(alive) == 3
 
-        ranked = sorted(others, key=lambda p: evil_prob[p.name], reverse=True)
+        if final_three:
+            return max(alive, key=lambda n: imp_prob.get(n.name, 0)) if alive else None
+
+        ranked = sorted(others, key=lambda p: evil_prob[p.name] + 2*imp_prob[p.name]/len(alive), reverse=True)
         target = ranked[0]
 
         return target
@@ -157,6 +160,13 @@ class GoodPlayerController(PlayerController):
         # Dead players will only vote in the final three
         if not self.player.alive and not final_three:
             return False
+        
+        if final_three:
+            alive_names = [player_view.seat_names[s] for s in player_view.alive_players]
+            best_demon = max(alive_names, key=lambda n: imp_prob.get(n, 0)) if alive_names else None
+            if nominee.name != best_demon:
+                return False
+            return True
 
         # Determine who is currently leading the vote
         leader = None
@@ -168,14 +178,6 @@ class GoodPlayerController(PlayerController):
 
         leader_score = evil_prob.get(leader, 0)
         nominee_score = evil_prob[nominee.name]
-
-        if final_three:
-            alive_names = [player_view.seat_names[s] for s in player_view.alive_players]
-            best_demon = max(alive_names, key=lambda n: imp_prob.get(n, 0)) if alive_names else None
-            if nominee.name != best_demon:
-                return False
-            return True
-            
 
         # Outside final three -------------------------------------------------
         if leader and leader != nominee.name and leader_score >= nominee_score:
